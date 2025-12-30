@@ -44,16 +44,6 @@ export default function ResultsPanel({
       .join(' ');
   };
 
-  const formatProperty = (key: string, value: any): string => {
-    if (typeof value === 'number') {
-      return value.toFixed(2);
-    }
-    if (typeof value === 'boolean') {
-      return value ? 'Yes' : 'No';
-    }
-    return String(value);
-  };
-
   // Group features by type
   const featuresByType = features.reduce((acc, feature) => {
     const type = formatFeatureType(feature.feature_type);

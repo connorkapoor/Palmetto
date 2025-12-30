@@ -1,0 +1,39 @@
+# Node modules and frontend build
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+
+# Python cache
+backend/__pycache__/
+backend/**/__pycache__/
+backend/.venv/
+backend/venv/
+backend/**/*.pyc
+
+# C++ build artifacts (will be rebuilt in container)
+core/.build/
+core/.local/
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+
+# Documentation and examples
+docs/
+examples/
+
+# Env files
+.env
+.env.local
+
+# Data and temp files
+backend/data/
+*.log
+*.tmp
+
+# macOS
+.DS_Store

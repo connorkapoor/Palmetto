@@ -95,11 +95,6 @@ function App() {
     }
   };
 
-  const handleFeaturesRecognized = (recognizedFeatures: RecognizedFeature[]) => {
-    setFeatures(recognizedFeatures);
-    setHighlightedFaceIds([]);
-  };
-
   const handleFeatureClick = (feature: RecognizedFeature, multiSelect = false) => {
     if (multiSelect) {
       // Toggle feature in multi-selection

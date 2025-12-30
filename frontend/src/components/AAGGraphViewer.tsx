@@ -22,6 +22,7 @@ interface GraphNode {
   color: string;
   val: number;
   attributes: Record<string, string>;
+  featureType?: string;
 }
 
 interface GraphLink {

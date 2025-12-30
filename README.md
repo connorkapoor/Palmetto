@@ -153,12 +153,24 @@ npm run lint
 npm run format
 ```
 
+## Deployment
+
+Deploy Palmetto to production:
+
+- **Quick Start**: See [DEPLOY_QUICKSTART.md](./DEPLOY_QUICKSTART.md) for 10-minute deployment
+- **Full Guide**: See [DEPLOYMENT.md](./DEPLOYMENT.md) for detailed instructions
+
+**Hosting:**
+- Frontend: Vercel (free tier)
+- Backend: Railway (free tier: $5/month credit)
+
 ## Documentation
 
 - [Architecture Overview](docs/architecture.md)
 - [Adding Recognizers](docs/recognizers.md)
 - [AAG Specification](docs/aag-specification.md)
 - [API Reference](docs/api-reference.md)
+- [Deployment Guide](DEPLOYMENT.md)
 
 ## Roadmap
 
