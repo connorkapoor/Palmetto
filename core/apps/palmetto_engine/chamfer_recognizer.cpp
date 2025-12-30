@@ -8,6 +8,7 @@
 #include <cmath>
 #include <sstream>
 #include <iomanip>
+#include <algorithm>
 
 // Define M_PI if not already defined
 #ifndef M_PI

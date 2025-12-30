@@ -8,6 +8,7 @@
 #include <cmath>
 #include <sstream>
 #include <iomanip>
+#include <functional>
 
 // Define M_PI if not already defined
 #ifndef M_PI
@@ -20,6 +21,7 @@
 #include <BRepLProp_SLProps.hxx>
 #include <GeomAbs_CurveType.hxx>
 #include <gp_Lin.hxx>
+#include <gp_Circ.hxx>
 #include <TopExp_Explorer.hxx>
 #include <TopoDS.hxx>
 #include <BRep_Tool.hxx>

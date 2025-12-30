@@ -40,6 +40,8 @@
 #include <Geom_Surface.hxx>
 #include <gp_Circ.hxx>
 #include <gp_Vec.hxx>
+#include <gp_Cylinder.hxx>
+#include <gp_Lin.hxx>
 
 namespace palmetto {
 

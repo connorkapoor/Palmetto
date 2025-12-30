@@ -13,6 +13,8 @@
 #include <TopExp_Explorer.hxx>
 #include <TopoDS.hxx>
 #include <gp_Lin.hxx>
+#include <gp_Cylinder.hxx>
+#include <gp_Torus.hxx>
 #include <cmath>
 
 #ifndef M_PI

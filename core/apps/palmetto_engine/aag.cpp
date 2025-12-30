@@ -25,6 +25,9 @@
 #include <GeomAPI_ProjectPointOnSurf.hxx>
 #include <GeomLProp_SLProps.hxx>
 #include <TopAbs_Orientation.hxx>
+#include <gp_Pln.hxx>
+#include <gp_Cylinder.hxx>
+#include <gp_Torus.hxx>
 
 namespace palmetto {
 
