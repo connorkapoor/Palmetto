@@ -36,14 +36,14 @@ FROM ubuntu:22.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Install runtime dependencies
+# Install runtime dependencies (using -dev packages as they include runtime libs)
 RUN apt-get update && apt-get install -y \
     python3.10 \
     python3-pip \
-    libocct-data-exchange-7.6t64 \
-    libocct-foundation-7.6t64 \
-    libocct-modeling-algorithms-7.6t64 \
-    libocct-modeling-data-7.6t64 \
+    libocct-data-exchange-dev \
+    libocct-foundation-dev \
+    libocct-modeling-algorithms-dev \
+    libocct-modeling-data-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy built engine
