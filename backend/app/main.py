@@ -95,23 +95,14 @@ async def root():
 
 @app.get("/health")
 async def health_check():
-    """Health check endpoint."""
-    from app.core.cpp_engine import get_engine
-
-    try:
-        engine = get_engine()
-        cpp_available = engine.check_available()
-        modules = engine.list_modules() if cpp_available else []
-    except:
-        cpp_available = False
-        modules = []
-
+    """
+    Health check endpoint for Railway/container orchestration.
+    Returns 200 OK if the API is responding.
+    """
     return {
-        "status": "healthy" if cpp_available else "degraded",
-        "engine": "C++ Analysis Situs",
-        "engine_available": cpp_available,
-        "modules_available": len(modules),
-        "modules": [m.get('name') for m in modules]
+        "status": "healthy",
+        "service": "palmetto-backend",
+        "version": settings.app_version
     }
 
 
