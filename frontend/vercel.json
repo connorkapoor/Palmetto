@@ -7,7 +7,7 @@
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "https://YOUR-RAILWAY-BACKEND-URL.up.railway.app/api/:path*"
+      "destination": "https://palmetto-production.up.railway.app/api/:path*"
     }
   ]
 }

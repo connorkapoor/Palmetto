@@ -19,7 +19,13 @@ class Settings(BaseSettings):
     # Server Settings
     host: str = "0.0.0.0"
     port: int = 8000
-    cors_origins: List[str] = ["http://localhost:5173", "http://127.0.0.1:5173"]
+    cors_origins: List[str] = [
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "https://palmettocad.com",
+        "https://www.palmettocad.com"
+    ]
+    cors_origin_regex: str = r"https://.*\.vercel\.app"  # Allow all Vercel deployments
 
     # File Upload Settings
     max_upload_size: int = 104857600  # 100MB in bytes
