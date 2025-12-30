@@ -3,15 +3,6 @@ fastapi>=0.104.0
 uvicorn[standard]>=0.24.0
 python-multipart>=0.0.6
 
-# OpenCASCADE Python bindings
-pythonocc-core>=7.7.0
-
-# Numerical computing
-numpy>=1.24.0
-
-# glTF export
-pygltflib>=1.16.0
-
 # Claude API
 anthropic>=0.8.0
 
