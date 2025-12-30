@@ -40,10 +40,10 @@ ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y \
     python3.10 \
     python3-pip \
-    libocct-data-exchange-7.6 \
-    libocct-foundation-7.6 \
-    libocct-modeling-algorithms-7.6 \
-    libocct-modeling-data-7.6 \
+    libocct-data-exchange-7.6t64 \
+    libocct-foundation-7.6t64 \
+    libocct-modeling-algorithms-7.6t64 \
+    libocct-modeling-data-7.6t64 \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy built engine
