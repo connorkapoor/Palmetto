@@ -15,9 +15,10 @@ from dataclasses import dataclass
 logger = logging.getLogger(__name__)
 
 # Path to the C++ engine binary
+# Default: ../core/.build/bin/palmetto_engine (relative to backend/ directory)
 ENGINE_BINARY = os.environ.get(
     "PALMETTO_ENGINE_PATH",
-    str(Path(__file__).parent.parent.parent / "bin" / "palmetto_engine")
+    str(Path(__file__).parent.parent.parent.parent / "core" / ".build" / "bin" / "palmetto_engine")
 )
 
 

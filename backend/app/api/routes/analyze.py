@@ -14,7 +14,6 @@ from pydantic import BaseModel
 from typing import List, Dict, Optional
 
 from app.core.cpp_engine import get_engine, CppEngineError
-from app.storage.model_store import ModelStore
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/analyze", tags=["analyze"])
