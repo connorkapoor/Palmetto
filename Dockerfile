@@ -24,6 +24,7 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /app/core
 COPY core/apps ./apps
 COPY core/third_party ./third_party
+COPY core/cmake ./cmake
 COPY core/CMakeLists.txt .
 
 # Build palmetto_engine

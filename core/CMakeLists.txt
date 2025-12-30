@@ -22,6 +22,9 @@ if(APPLE)
     set(CMAKE_BUILD_WITH_INSTALL_RPATH ON)
 endif()
 
+# Add custom CMake modules path
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
+
 # Find OpenCASCADE
 # First try CMAKE_PREFIX_PATH, then system paths
 find_package(OpenCASCADE REQUIRED)
