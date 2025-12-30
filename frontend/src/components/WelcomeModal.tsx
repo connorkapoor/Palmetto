@@ -46,7 +46,7 @@ export function WelcomeModal({ onClose }: WelcomeModalProps) {
             <ol className="welcome-steps">
               <li>
                 <strong>Upload a CAD File</strong>
-                <p>Click "Choose File" in the sidebar and select a STEP, IGES, or BREP file</p>
+                <p>Click "Choose File" in the sidebar and select a STEP file (.step or .stp)</p>
               </li>
               <li>
                 <strong>View Features</strong>
@@ -78,9 +78,6 @@ export function WelcomeModal({ onClose }: WelcomeModalProps) {
             <div className="file-formats">
               <span className="file-badge">.STEP</span>
               <span className="file-badge">.STP</span>
-              <span className="file-badge">.IGES</span>
-              <span className="file-badge">.IGS</span>
-              <span className="file-badge">.BREP</span>
             </div>
           </div>
         </div>

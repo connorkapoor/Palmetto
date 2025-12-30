@@ -326,8 +326,6 @@ function App() {
                     <p>Supported formats:</p>
                     <ul>
                       <li>.step / .stp</li>
-                      <li>.iges / .igs</li>
-                      <li>.brep</li>
                     </ul>
                   </div>
                 </div>

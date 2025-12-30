@@ -1,6 +1,6 @@
 /**
  * FileUpload Component
- * Handles CAD file uploads (STEP, IGES, BREP)
+ * Handles CAD file uploads (STEP only)
  */
 
 import { useState, useRef } from 'react';
@@ -21,7 +21,7 @@ export default function FileUpload({ onUploadSuccess }: FileUploadProps) {
     if (!file) return;
 
     // Validate file extension
-    const validExtensions = ['.step', '.stp', '.iges', '.igs', '.brep'];
+    const validExtensions = ['.step', '.stp'];
     const fileExt = file.name.toLowerCase().slice(file.name.lastIndexOf('.'));
 
     if (!validExtensions.includes(fileExt)) {
@@ -66,7 +66,7 @@ export default function FileUpload({ onUploadSuccess }: FileUploadProps) {
         <input
           ref={fileInputRef}
           type="file"
-          accept=".step,.stp,.iges,.igs,.brep"
+          accept=".step,.stp"
           onChange={handleFileChange}
           disabled={uploading}
           style={{ display: 'none' }}
@@ -94,7 +94,7 @@ export default function FileUpload({ onUploadSuccess }: FileUploadProps) {
                 />
               </svg>
               <p className="upload-text">Click to upload or drag and drop</p>
-              <p className="upload-hint">STEP, IGES, or BREP files</p>
+              <p className="upload-hint">STEP files only (.step, .stp)</p>
             </>
           )}
         </div>

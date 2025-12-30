@@ -30,7 +30,7 @@ class Settings(BaseSettings):
     # File Upload Settings
     max_upload_size: int = 104857600  # 100MB in bytes
     upload_dir: str = "temp/uploads"
-    allowed_extensions: List[str] = [".step", ".stp", ".iges", ".igs", ".brep"]
+    allowed_extensions: List[str] = [".step", ".stp"]
 
     # Tessellation Settings (for B-Rep to mesh conversion)
     linear_deflection: float = 0.1  # Linear deflection for tessellation
