@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <!-- Palm tree trunk -->
+  <rect x="44" y="45" width="12" height="45" rx="2" fill="#8B4513"/>
+
+  <!-- Palm fronds -->
+  <ellipse cx="50" cy="30" rx="35" ry="15" fill="#228B22" transform="rotate(-30 50 30)"/>
+  <ellipse cx="50" cy="30" rx="35" ry="15" fill="#2E8B57" transform="rotate(30 50 30)"/>
+  <ellipse cx="50" cy="28" rx="38" ry="16" fill="#32CD32" transform="rotate(0 50 28)"/>
+  <ellipse cx="50" cy="32" rx="32" ry="14" fill="#228B22" transform="rotate(-60 50 32)"/>
+  <ellipse cx="50" cy="32" rx="32" ry="14" fill="#2E8B57" transform="rotate(60 50 32)"/>
+
+  <!-- Coconuts -->
+  <circle cx="48" cy="42" r="4" fill="#8B4513"/>
+  <circle cx="52" cy="44" r="4" fill="#A0522D"/>
+  <circle cx="50" cy="48" r="4" fill="#8B4513"/>
+</svg>

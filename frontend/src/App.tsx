@@ -10,6 +10,7 @@ import Viewer3D from './components/Viewer3D';
 import ResultsPanel from './components/ResultsPanel';
 import AAGGraphViewer from './components/AAGGraphViewer';
 import { ScriptingPanel } from './components/ScriptingPanel';
+import { WelcomeModal } from './components/WelcomeModal';
 import { RecognizedFeature } from './types/features';
 
 function App() {
@@ -268,6 +269,8 @@ function App() {
 
   return (
     <div className="app">
+      <WelcomeModal onClose={() => {}} />
+
       <header className="app-header">
         <h1>Palmetto</h1>
       </header>
