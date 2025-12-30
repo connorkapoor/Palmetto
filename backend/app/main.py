@@ -3,6 +3,7 @@ Palmetto - CAD Feature Recognition Tool
 FastAPI main application.
 """
 
+import os
 import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
@@ -30,8 +31,9 @@ async def lifespan(app: FastAPI):
     # Startup
     logger.info("Starting Palmetto CAD Feature Recognition API...")
     logger.info(f"Configuration: {settings.app_name} v{settings.app_version}")
+    logger.info(f"Listening on port: {os.environ.get('PORT', '8000')}")
 
-    # Check C++ Analysis Situs engine
+    # Check C++ Analysis Situs engine (non-blocking)
     from app.core.cpp_engine import get_engine
     try:
         engine = get_engine()
@@ -42,8 +44,12 @@ async def lifespan(app: FastAPI):
             logger.info(f"Available C++ modules: {[m.get('name') for m in modules]}")
         else:
             logger.warning("⚠️  C++ engine not responding to --version check")
+    except FileNotFoundError as e:
+        logger.error(f"❌ C++ engine binary not found: {e}")
+        logger.error("Application will start but CAD processing will not work")
     except Exception as e:
         logger.error(f"❌ C++ engine initialization failed: {e}")
+        logger.error("Application will start but CAD processing may not work")
 
     yield
 

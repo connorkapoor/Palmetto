@@ -59,9 +59,9 @@ class CppEngine:
         self.engine_path = engine_path or ENGINE_BINARY
 
         if not os.path.exists(self.engine_path):
-            raise FileNotFoundError(
+            logger.warning(
                 f"C++ engine not found at {self.engine_path}. "
-                f"Build it with: cd core && cmake --build .build/palmetto_engine"
+                f"Build it with: cd core && cmake --build .build"
             )
 
     def process_step_file(
