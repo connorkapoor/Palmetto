@@ -3,6 +3,7 @@
  */
 
 import { useState } from 'react';
+import { Analytics } from '@vercel/analytics/react';
 import './App.css';
 import FileUpload from './components/FileUpload';
 import Viewer3D from './components/Viewer3D';
@@ -349,6 +350,9 @@ function App() {
           onQueryResult={handleQueryResult}
         />
       )}
+
+      {/* Vercel Analytics */}
+      <Analytics />
     </div>
   );
 }
