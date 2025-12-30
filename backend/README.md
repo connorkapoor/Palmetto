@@ -1,14 +1,19 @@
 # Palmetto Backend
 
-CAD Feature Recognition Tool - FastAPI Backend
+FastAPI backend for Palmetto CAD feature recognition tool.
 
 ## Features
 
-- Graph-based feature recognition using Attributed Adjacency Graph (AAG)
-- Support for STEP, IGES, and BREP file formats
-- Extensible plugin architecture for feature recognizers
-- Natural language interface via Claude API
-- glTF export with face-level metadata for visualization
+- C++ engine integration for feature recognition
+- Natural language geometric queries via Claude API
+- AAG graph serving and visualization
+- REST API for frontend
+
+## Prerequisites
+
+- Python 3.9+
+- C++ engine built (see `core/` directory)
+- Anthropic API key (optional, for NL queries)
 
 ## Installation
 
@@ -19,6 +24,10 @@ source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 
 # Install dependencies
 pip install -r requirements.txt
+
+# Set up environment
+cp .env.example .env
+# Edit .env and add your ANTHROPIC_API_KEY if using NL queries
 ```
 
 ## Running the Server
@@ -27,47 +36,33 @@ pip install -r requirements.txt
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
+The C++ engine binary will be automatically located at:
+1. `$PALMETTO_ENGINE_PATH` (if set)
+2. `../core/.build/bin/palmetto_engine` (default)
+
 ## API Documentation
 
 Once running, visit:
 - Swagger UI: http://localhost:8000/docs
-- ReDoc: http://localhost:8000/redoc
+- Health check: http://localhost:8000/health
 
 ## Project Structure
 
 ```
 app/
-├── main.py                 # FastAPI application entry point
-├── config.py               # Configuration management
-├── api/                    # API routes and schemas
-├── core/                   # Core CAD processing
-│   ├── cad_loader.py      # STEP/IGES/BREP loader
-│   ├── topology/          # AAG implementation
-│   ├── geometry/          # Geometric analysis
-│   └── meshing/           # Tessellation and glTF export
-├── recognizers/           # Feature recognizers
-│   ├── base.py           # Base recognizer class
-│   ├── registry.py       # Plugin registry
-│   ├── features/         # Feature recognizers (holes, fillets, etc.)
-│   └── analysis/         # Analysis tools
-├── nl_processing/        # Natural language interface
-└── storage/              # In-memory model storage
-```
-
-## Development
-
-```bash
-# Run tests
-pytest
-
-# Format code
-black .
-
-# Lint code
-ruff check .
-
-# Type check
-mypy app
+├── main.py              # FastAPI application entry point
+├── config.py            # Configuration management
+├── api/                 # API routes
+│   └── routes/
+│       ├── analyze.py   # C++ engine integration
+│       ├── query.py     # NL query execution
+│       ├── aag.py       # AAG data serving
+│       └── graph.py     # Graph visualization
+├── core/
+│   └── cpp_engine.py    # C++ engine wrapper
+├── query/               # Query engine and parser
+├── nl_processing/       # Claude API client
+└── storage/             # Model storage
 ```
 
 ## Environment Variables
@@ -75,14 +70,14 @@ mypy app
 Create a `.env` file:
 
 ```env
-# Claude API
+# Claude API (optional, for natural language queries)
 ANTHROPIC_API_KEY=your_api_key_here
 
 # Server settings
 CORS_ORIGINS=http://localhost:5173
-MAX_UPLOAD_SIZE=104857600  # 100MB
+HOST=0.0.0.0
+PORT=8000
 
-# Tessellation
-LINEAR_DEFLECTION=0.1
-ANGULAR_DEFLECTION=0.5
+# Optional: Override C++ engine path
+# PALMETTO_ENGINE_PATH=/path/to/palmetto_engine
 ```

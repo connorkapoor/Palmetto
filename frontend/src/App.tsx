@@ -7,7 +7,6 @@ import './App.css';
 import FileUpload from './components/FileUpload';
 import Viewer3D from './components/Viewer3D';
 import ResultsPanel from './components/ResultsPanel';
-// import NLInterface from './components/NLInterface';  // Disabled - uses Python recognizers
 import AAGGraphViewer from './components/AAGGraphViewer';
 import { ScriptingPanel } from './components/ScriptingPanel';
 import { RecognizedFeature } from './types/features';
@@ -288,12 +287,6 @@ function App() {
                 <p className="filename">{modelFilename}</p>
                 <p className="model-id">ID: {modelId.slice(0, 8)}...</p>
               </div>
-
-              {/* NL Interface temporarily disabled - uses Python recognizers */}
-              {/* <NLInterface
-                modelId={modelId}
-                onFeaturesRecognized={handleFeaturesRecognized}
-              /> */}
 
               <ResultsPanel
                 features={features}

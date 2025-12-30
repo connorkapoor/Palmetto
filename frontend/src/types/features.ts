@@ -41,9 +41,3 @@ export interface GLTFMetadata {
     exporter: string;
   };
 }
-
-export interface RecognizerInfo {
-  name: string;
-  description: string;
-  feature_types: string[];
-}

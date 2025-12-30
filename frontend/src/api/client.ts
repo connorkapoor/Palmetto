@@ -3,7 +3,6 @@
  */
 
 import axios from 'axios';
-import { RecognizedFeature, RecognizerInfo } from '../types/features';
 
 // Use relative URLs to leverage Vite proxy during development
 // In production, set VITE_API_URL environment variable
@@ -22,7 +21,6 @@ export interface UploadResponse {
   model_id: string;
   filename: string;
   file_format: string;
-  topology_stats: Record<string, number>;
   message: string;
 }
 
@@ -36,89 +34,6 @@ export async function uploadFile(file: File): Promise<UploadResponse> {
     },
   });
 
-  return response.data;
-}
-
-export async function listModels() {
-  const response = await api.get('/api/upload/models');
-  return response.data;
-}
-
-export async function deleteModel(modelId: string) {
-  const response = await api.delete(`/api/upload/models/${modelId}`);
-  return response.data;
-}
-
-// Recognition
-
-export interface RecognitionRequest {
-  model_id: string;
-  recognizer: string;
-  parameters: Record<string, any>;
-}
-
-export interface RecognitionResponse {
-  model_id: string;
-  recognizer: string;
-  features: RecognizedFeature[];
-  execution_time: number;
-  feature_count: number;
-}
-
-export async function recognizeFeatures(
-  request: RecognitionRequest
-): Promise<RecognitionResponse> {
-  const response = await api.post<RecognitionResponse>(
-    '/api/recognition/recognize',
-    request
-  );
-  return response.data;
-}
-
-export async function listRecognizers(): Promise<{ recognizers: RecognizerInfo[] }> {
-  const response = await api.get('/api/recognition/recognizers');
-  return response.data;
-}
-
-// Natural Language
-
-export interface NLRequest {
-  model_id: string;
-  command: string;
-}
-
-export interface NLResponse {
-  model_id: string;
-  command: string;
-  recognized_intent: {
-    recognizer: string;
-    parameters: Record<string, any>;
-    confidence: number;
-  };
-  recognizer: string;
-  features: RecognizedFeature[];
-  execution_time: number;
-}
-
-export async function parseNLCommand(request: NLRequest): Promise<NLResponse> {
-  const response = await api.post<NLResponse>('/api/nl/parse', request);
-  return response.data;
-}
-
-// Export
-
-export interface ExportRequest {
-  model_id: string;
-  include_features: boolean;
-  feature_ids: string[];
-  linear_deflection?: number;
-  angular_deflection?: number;
-}
-
-export async function exportToGLTF(request: ExportRequest): Promise<Blob> {
-  const response = await api.post('/api/export/gltf', request, {
-    responseType: 'blob',
-  });
   return response.data;
 }
 

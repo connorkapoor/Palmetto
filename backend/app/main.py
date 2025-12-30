@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.config import get_settings
-from app.api.routes import upload, recognition, export, nl_interface, graph, analyze, query, aag
+from app.api.routes import graph, analyze, query, aag
 
 # Configure logging
 logging.basicConfig(
@@ -69,14 +69,10 @@ app.add_middleware(
 )
 
 # Include routers
-app.include_router(upload.router)
-app.include_router(recognition.router)
-app.include_router(export.router)
-app.include_router(nl_interface.router)
-app.include_router(graph.router)
-app.include_router(analyze.router)  # New C++ engine-based analysis
-app.include_router(query.router)  # Natural language query execution
-app.include_router(aag.router)  # AAG data access
+app.include_router(analyze.router)  # C++ engine-based analysis
+app.include_router(query.router)    # Natural language query execution
+app.include_router(aag.router)      # AAG data access
+app.include_router(graph.router)    # AAG graph visualization
 
 
 @app.get("/")
@@ -87,15 +83,12 @@ async def root():
         "version": settings.app_version,
         "description": "CAD Feature Recognition API powered by Analysis Situs C++ Engine",
         "docs": "/docs",
-        "primary_endpoints": {
-            "analyze": "/api/analyze",
-            "health": "/health"
-        },
-        "legacy_endpoints": {
-            "upload": "/api/upload (deprecated - use /api/analyze/upload)",
-            "recognition": "/api/recognition (deprecated - use /api/analyze/process)",
-            "export": "/api/export",
-            "graph": "/api/graph"
+        "endpoints": {
+            "analyze": "/api/analyze - Upload and process CAD files",
+            "query": "/api/query - Natural language geometric queries",
+            "aag": "/api/aag - AAG data access",
+            "graph": "/api/graph - AAG graph visualization",
+            "health": "/health - Health check"
         }
     }
 

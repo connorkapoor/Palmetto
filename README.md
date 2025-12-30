@@ -33,13 +33,15 @@ Palmetto is an expandable DFM (Design for Manufacturing) and feature checking to
 
 ```
 palmetto/
+├── core/              # C++ feature recognition engine
+│   ├── apps/palmetto_engine/  # Main engine source
+│   └── third_party/   # Dependencies (Analysis Situs, OpenCASCADE)
 ├── backend/           # FastAPI backend
-│   ├── app/
-│   │   ├── core/      # CAD processing, AAG, meshing
-│   │   ├── recognizers/  # Feature detection plugins
-│   │   ├── api/       # REST endpoints
-│   │   └── nl_processing/  # NL interface
-│   └── tests/
+│   └── app/
+│       ├── api/       # REST endpoints
+│       ├── core/      # C++ engine integration
+│       ├── query/     # Natural language query engine
+│       └── nl_processing/  # Claude API client
 ├── frontend/          # React frontend
 │   └── src/
 │       ├── components/  # UI components
@@ -51,7 +53,19 @@ palmetto/
 
 ## Quick Start
 
-### Backend Setup
+### 1. Build C++ Engine
+
+```bash
+cd core
+mkdir -p .build && cd .build
+cmake .. -DCMAKE_PREFIX_PATH=/path/to/opencascade
+cmake --build . --config Release
+# Binary will be at: .build/bin/palmetto_engine
+```
+
+See [core/docs/build-macos.md](core/docs/build-macos.md) for platform-specific build instructions.
+
+### 2. Backend Setup
 
 ```bash
 cd backend
@@ -61,13 +75,13 @@ pip install -r requirements.txt
 
 # Set up environment variables
 cp .env.example .env
-# Edit .env and add your ANTHROPIC_API_KEY
+# Edit .env and add your ANTHROPIC_API_KEY (optional, for NL queries)
 
-# Run server
-uvicorn app.main:app --reload
+# Run server (ensure C++ engine is built first)
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-### Frontend Setup
+### 3. Frontend Setup
 
 ```bash
 cd frontend
@@ -79,80 +93,62 @@ Visit http://localhost:5173 to use the application.
 
 ## Feature Recognizers
 
-Current recognizers (more coming):
-- **Hole Detector**: Simple, countersunk, counterbored, and threaded holes
-- **Shaft Detector**: Protruding cylindrical features
-- **Cavity Detector**: Blind pockets and through cavities
-- **Fillet Detector**: Rounded blend features
-- **Sheet Metal Features**: Bends, flanges, etc.
-- **CNC Milling Features**: Pockets, slots, etc.
+Implemented in C++ using Analysis Situs algorithms:
+- **Holes**: Simple through-holes, countersunk, counterbored
+- **Cavities**: Pockets and recesses (concave regions)
+- **Fillets**: Toroidal blend surfaces
+- **Chamfers**: Beveled edges
+- **Blends**: General blending features
 
-## Adding New Recognizers
-
-Create a new recognizer in `backend/app/recognizers/features/`:
-
-```python
-from app.recognizers.base import BaseRecognizer, RecognizedFeature
-from app.recognizers.registry import register_recognizer
-
-@register_recognizer
-class MyFeatureRecognizer(BaseRecognizer):
-    def get_name(self) -> str:
-        return "my_feature_detector"
-
-    def recognize(self, **kwargs) -> List[RecognizedFeature]:
-        # Implement recognition logic using self.graph
-        pass
-```
-
-That's it! The recognizer is automatically registered and available via API and NL interface.
+All recognizers operate on the Attributed Adjacency Graph (AAG) representation of the CAD model.
 
 ## API Endpoints
 
-- `POST /api/upload` - Upload CAD file
-- `POST /api/recognition/recognize` - Run specific recognizer
-- `POST /api/nl/parse` - Parse natural language command
-- `POST /api/export/gltf` - Export to glTF
-- `GET /api/recognition/recognizers` - List available recognizers
+- `POST /api/analyze/upload` - Upload STEP file
+- `POST /api/analyze/process` - Process model with C++ engine
+- `GET /api/analyze/{model_id}/artifacts/{file}` - Download generated artifacts
+- `POST /api/query/execute` - Execute natural language geometric query
+- `GET /api/query/examples` - Get example queries
+- `GET /api/graph/{model_id}` - Get AAG graph for visualization
+- `GET /api/aag/{model_id}/graph` - Get full AAG data
 
 See [API Documentation](docs/api-reference.md) for details.
 
 ## Technology Stack
 
+**C++ Engine:**
+- OpenCASCADE 7.8+ - CAD kernel
+- Analysis Situs - Feature recognition framework
+- RapidJSON - JSON output
+- TinyGLTF - Mesh export
+
 **Backend:**
 - FastAPI - Web framework
-- pythonOCC - OpenCASCADE bindings
-- NumPy - Numerical computing
-- pygltflib - glTF export
-- Anthropic SDK - Claude API
+- Anthropic SDK - Claude API for NL queries
 
 **Frontend:**
 - React - UI framework
 - Three.js - 3D rendering
 - TypeScript - Type safety
 - Vite - Build tool
+- PrimeReact - UI components
 
 ## Development
-
-### Run Tests
-
-```bash
-cd backend
-pytest
-
-cd ../frontend
-npm test
-```
 
 ### Code Quality
 
 ```bash
+# C++ (if you have clang-format)
+cd core
+find apps -name "*.cpp" -o -name "*.h" | xargs clang-format -i
+
 # Backend
+cd backend
 black .
 ruff check .
-mypy app
 
 # Frontend
+cd frontend
 npm run lint
 npm run format
 ```
