@@ -1,0 +1,447 @@
+/**
+ * DFMPanel - Apple Glass Glassmorphism Styling
+ *
+ * Design inspired by Apple's visionOS glass materials.
+ * Uses backdrop blur, transparency, and subtle borders for depth.
+ */
+
+.dfm-panel {
+  background: rgba(255, 255, 255, 0.5);
+  backdrop-filter: blur(10px) saturate(150%);
+  -webkit-backdrop-filter: blur(10px) saturate(150%);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 12px;
+  padding: 16px;
+  max-height: 400px;
+  overflow-y: auto;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.05);
+  transition: all 0.3s ease;
+  margin-top: 16px;
+}
+
+.dfm-panel:hover {
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.15);
+}
+
+/* Minimized state */
+.dfm-panel.minimized {
+  max-height: 60px;
+  overflow: hidden;
+  padding: 12px 16px;
+}
+
+.dfm-panel.minimized:hover {
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+}
+
+/* Header */
+.dfm-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.dfm-panel.minimized .dfm-header {
+  margin-bottom: 0;
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+.dfm-header h3 {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #333;
+}
+
+.dfm-header-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.process-selector {
+  background: rgba(255, 255, 255, 0.6);
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  border-radius: 8px;
+  padding: 6px 12px;
+  font-size: 0.9rem;
+  color: #333;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.process-selector:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.8);
+  border-color: rgba(0, 0, 0, 0.25);
+}
+
+.process-selector:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Minimize button */
+.minimize-btn {
+  background: rgba(100, 100, 100, 0.1);
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 0.9rem;
+  color: #666;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-width: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.minimize-btn:hover {
+  background: rgba(100, 100, 100, 0.2);
+  border-color: rgba(0, 0, 0, 0.25);
+  color: #333;
+}
+
+/* Placeholder states */
+.dfm-placeholder,
+.loading-spinner,
+.error-message,
+.no-violations {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 16px;
+  text-align: center;
+}
+
+.dfm-placeholder p {
+  color: #888;
+  font-size: 0.95rem;
+}
+
+/* Loading spinner */
+.loading-spinner .spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid rgba(0, 0, 0, 0.1);
+  border-top-color: #0066cc;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 12px;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.loading-spinner p {
+  color: #666;
+  font-size: 0.9rem;
+}
+
+/* Error message */
+.error-message {
+  color: #ff3232;
+}
+
+.error-icon {
+  font-size: 2rem;
+  margin-bottom: 8px;
+}
+
+.error-message p {
+  font-size: 0.9rem;
+  margin: 0;
+}
+
+/* No violations */
+.no-violations {
+  color: #22bb33;
+}
+
+.check-icon {
+  font-size: 3rem;
+  margin-bottom: 8px;
+}
+
+.no-violations p {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0 0 4px 0;
+}
+
+.no-violations .subtitle {
+  font-size: 0.85rem;
+  color: #666;
+  text-transform: capitalize;
+}
+
+/* Violations container */
+.violations-container {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Violation summary badges */
+.violation-summary {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.badge {
+  padding: 6px 12px;
+  border-radius: 12px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: white;
+  white-space: nowrap;
+}
+
+.badge-error {
+  background: linear-gradient(135deg, #ff3232 0%, #ff5555 100%);
+  box-shadow: 0 2px 8px rgba(255, 50, 50, 0.3);
+}
+
+.badge-warning {
+  background: linear-gradient(135deg, #ffaa00 0%, #ffcc00 100%);
+  box-shadow: 0 2px 8px rgba(255, 170, 0, 0.3);
+}
+
+.badge-info {
+  background: linear-gradient(135deg, #3399ff 0%, #5555ff 100%);
+  box-shadow: 0 2px 8px rgba(51, 153, 255, 0.3);
+}
+
+/* Clear highlight button */
+.clear-highlight-btn {
+  background: rgba(100, 100, 100, 0.1);
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  border-radius: 8px;
+  padding: 8px 16px;
+  font-size: 0.85rem;
+  color: #333;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.clear-highlight-btn:hover:not(:disabled) {
+  background: rgba(100, 100, 100, 0.2);
+  border-color: rgba(0, 0, 0, 0.25);
+}
+
+.clear-highlight-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Violations list */
+.violations-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Violation group */
+.violation-group {
+  background: rgba(255, 255, 255, 0.5);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 12px;
+  overflow: hidden;
+  transition: all 0.2s ease;
+}
+
+.violation-group:hover {
+  background: rgba(255, 255, 255, 0.7);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+/* Group header */
+.group-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.2s ease;
+}
+
+.group-header:hover {
+  background: rgba(0, 0, 0, 0.03);
+}
+
+.severity-icon {
+  font-size: 1.3rem;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.severity-icon.severity-error {
+  color: #ff3232;
+}
+
+.severity-icon.severity-warning {
+  color: #ffaa00;
+}
+
+.severity-icon.severity-info {
+  color: #3399ff;
+}
+
+.group-title {
+  flex: 1;
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: #333;
+}
+
+.group-count {
+  background: rgba(0, 0, 0, 0.08);
+  padding: 2px 8px;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #666;
+}
+
+.expand-icon {
+  font-size: 0.7rem;
+  color: #999;
+  transition: transform 0.2s ease;
+}
+
+.expand-icon.expanded {
+  transform: rotate(0deg);
+}
+
+.expand-icon.collapsed {
+  transform: rotate(-90deg);
+}
+
+/* Violation item */
+.violation-item {
+  padding: 12px 16px;
+  margin: 0 8px 8px 8px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: 2px solid transparent;
+}
+
+.violation-item.severity-error {
+  background: rgba(255, 50, 50, 0.08);
+}
+
+.violation-item.severity-warning {
+  background: rgba(255, 170, 0, 0.08);
+}
+
+.violation-item.severity-info {
+  background: rgba(51, 153, 255, 0.08);
+}
+
+.violation-item:hover {
+  transform: translateX(4px);
+}
+
+.violation-item.severity-error:hover {
+  background: rgba(255, 50, 50, 0.15);
+  border-left-color: #ff3232;
+}
+
+.violation-item.severity-warning:hover {
+  background: rgba(255, 170, 0, 0.15);
+  border-left-color: #ffaa00;
+}
+
+.violation-item.severity-info:hover {
+  background: rgba(51, 153, 255, 0.15);
+  border-left-color: #3399ff;
+}
+
+.violation-item.selected {
+  background: rgba(100, 200, 255, 0.2);
+  border-left-color: #0066cc;
+  border-left-width: 4px;
+}
+
+.violation-message {
+  font-size: 0.9rem;
+  color: #333;
+  line-height: 1.4;
+  margin-bottom: 6px;
+}
+
+.violation-details {
+  display: flex;
+  gap: 8px;
+  font-size: 0.8rem;
+  color: #666;
+  margin-bottom: 4px;
+}
+
+.violation-value {
+  font-weight: 600;
+  color: #ff3232;
+}
+
+.violation-threshold {
+  color: #888;
+}
+
+.violation-entity {
+  font-size: 0.75rem;
+  color: #999;
+  font-family: monospace;
+}
+
+/* Scrollbar styling */
+.dfm-panel::-webkit-scrollbar {
+  width: 8px;
+}
+
+.dfm-panel::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 8px;
+}
+
+.dfm-panel::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 8px;
+}
+
+.dfm-panel::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.3);
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .dfm-panel {
+    max-height: 400px;
+  }
+
+  .dfm-header {
+    flex-direction: column;
+    gap: 12px;
+    align-items: flex-start;
+  }
+
+  .process-selector {
+    width: 100%;
+  }
+
+  .violation-summary {
+    justify-content: center;
+  }
+}

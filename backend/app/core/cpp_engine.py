@@ -75,7 +75,11 @@ class CppEngine:
         thickness_max_distance: float = 50.0,
         enable_thickness_heatmap: bool = False,
         heatmap_quality: float = 0.05,
-        timeout: int = 300
+        enable_sdf: bool = False,
+        sdf_resolution: int = 100,
+        enable_dfm_geometry: bool = True,  # Enable DFM geometry analysis by default
+        draft_direction: str = "0,0,1",    # Default draft direction (Z-axis)
+        timeout: int = 900  # Increased to 15 minutes for large complex models
     ) -> EngineResult:
         """
         Process a STEP file through the C++ engine.
@@ -90,6 +94,8 @@ class CppEngine:
             thickness_max_distance: Maximum search distance for thickness analysis in mm (default: 50.0)
             enable_thickness_heatmap: Generate dense analysis mesh with thickness heatmap (default: False)
             heatmap_quality: Mesh quality for analysis mesh 0.0-1.0 (default: 0.05, denser = smaller)
+            enable_sdf: Generate volumetric Signed Distance Field (default: False)
+            sdf_resolution: SDF grid resolution along longest axis (default: 100)
             timeout: Maximum processing time in seconds
 
         Returns:
@@ -120,6 +126,16 @@ class CppEngine:
         if enable_thickness_heatmap:
             cmd.append("--enable-thickness-heatmap")
             cmd.extend(["--heatmap-quality", str(heatmap_quality)])
+
+        # Add SDF if enabled
+        if enable_sdf:
+            cmd.append("--enable-sdf")
+            cmd.extend(["--sdf-resolution", str(sdf_resolution)])
+
+        # Add DFM geometry analysis if enabled
+        if enable_dfm_geometry:
+            cmd.append("--analyze-dfm-geometry")
+            cmd.extend(["--draft-direction", draft_direction])
 
         logger.info(f"Running C++ engine: {' '.join(cmd)}")
 

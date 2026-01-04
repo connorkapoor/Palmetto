@@ -8,6 +8,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { FaceMap } from '../types/features';
+import { SDF, sliceSDF, sampleSDF, thicknessToColor, createSlicePlane } from '../utils/sdfSlicer';
 import './Viewer3D.css';
 
 interface TopologyData {
@@ -23,21 +24,29 @@ interface Viewer3DProps {
   gltfUrl: string;
   triFaceMapUrl: string;
   topologyUrl: string;
+  sdfUrl?: string;
+  showThicknessAnalysis?: boolean;
+  slicePlanePosition?: number;
+  slicePlaneAxis?: 'x' | 'y' | 'z';
+  thicknessRange?: [number, number];
   highlightedFaceIds: string[];
   highlightedVertexIds?: string[];
   highlightedEdgeIds?: string[];
   onFaceClick?: (faceId: string, multiSelect?: boolean) => void;
+  onThicknessQuery?: (thickness: number, position: [number, number, number]) => void;
 }
 
-export default function Viewer3D({ gltfUrl, triFaceMapUrl, topologyUrl, highlightedFaceIds, highlightedVertexIds = [], highlightedEdgeIds = [], onFaceClick }: Viewer3DProps) {
+export default function Viewer3D({ gltfUrl, triFaceMapUrl, topologyUrl, sdfUrl, showThicknessAnalysis = false, slicePlanePosition = 0.5, slicePlaneAxis = 'z', thicknessRange = [0, 10], highlightedFaceIds, highlightedVertexIds = [], highlightedEdgeIds = [], onFaceClick, onThicknessQuery }: Viewer3DProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
-  const meshRef = useRef<THREE.Mesh | null>(null);
-  const faceMapRef = useRef<FaceMap | null>(null);
-  const triFaceMapArrayRef = useRef<Uint32Array | null>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
   const controlsRef = useRef<OrbitControls | null>(null);
+  const meshRef = useRef<THREE.Mesh | null>(null);
+  const faceMapRef = useRef<FaceMap | null>(null);
+  const triFaceMapArrayRef = useRef<Uint32Array | null>(null);
+  const clippingPlaneRef = useRef<THREE.Plane | null>(null);
+  const sdfBboxRef = useRef<{ min: [number, number, number]; max: [number, number, number] } | null>(null);
   const [loading, setLoading] = useState(true);
   const raycasterRef = useRef<THREE.Raycaster>(new THREE.Raycaster());
   const mouseRef = useRef<THREE.Vector2>(new THREE.Vector2());
@@ -46,6 +55,8 @@ export default function Viewer3D({ gltfUrl, triFaceMapUrl, topologyUrl, highligh
   const edgeLinesRef = useRef<THREE.LineSegments | null>(null);
   const vertexPointsRef = useRef<THREE.Points | null>(null);
   const edgeSegmentMapRef = useRef<Map<number, number[]>>(new Map()); // edge ID -> segment indices
+  const sdfRef = useRef<SDF | null>(null);
+  const sliceMeshRef = useRef<THREE.Mesh | null>(null);
 
   // Keep ref up to date
   useEffect(() => {
@@ -77,6 +88,7 @@ export default function Viewer3D({ gltfUrl, triFaceMapUrl, topologyUrl, highligh
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(container.clientWidth, container.clientHeight);
     renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.localClippingEnabled = true;  // Enable clipping planes
     container.appendChild(renderer.domElement);
     rendererRef.current = renderer;
 
@@ -141,7 +153,7 @@ export default function Viewer3D({ gltfUrl, triFaceMapUrl, topologyUrl, highligh
     if (!rendererRef.current) return;
 
     const handleClick = (event: MouseEvent) => {
-      if (!meshRef.current || !triFaceMapArrayRef.current || !cameraRef.current || !containerRef.current) {
+      if (!cameraRef.current || !containerRef.current) {
         return;
       }
 
@@ -153,16 +165,53 @@ export default function Viewer3D({ gltfUrl, triFaceMapUrl, topologyUrl, highligh
       const raycaster = raycasterRef.current;
       raycaster.setFromCamera(mouse, cameraRef.current);
 
-      const intersects = raycaster.intersectObject(meshRef.current);
-      if (intersects.length > 0) {
-        const intersection = intersects[0];
-        if (intersection.faceIndex !== undefined) {
-          // Get the face ID from the tri_face_map
-          const faceId = triFaceMapArrayRef.current[intersection.faceIndex];
-          const multiSelect = event.ctrlKey || event.metaKey;
-          console.log('Clicked face:', faceId, multiSelect ? '(multi-select)' : '');
-          if (onFaceClickRef.current) {
-            onFaceClickRef.current(faceId.toString(), multiSelect);
+      // Check if thickness analysis is active and we clicked on the section mesh
+      if (showThicknessAnalysis && sliceMeshRef.current) {
+        const intersects = raycaster.intersectObject(sliceMeshRef.current);
+        if (intersects.length > 0) {
+          const intersection = intersects[0];
+          const geometry = sliceMeshRef.current.geometry;
+          const thicknessAttr = geometry.attributes.thickness as THREE.BufferAttribute;
+
+          if (intersection.face && thicknessAttr) {
+            // Get thickness values for the triangle vertices
+            const a = intersection.face.a;
+            const b = intersection.face.b;
+            const c = intersection.face.c;
+
+            // Average thickness of the three vertices
+            const thickness = (
+              thicknessAttr.getX(a) +
+              thicknessAttr.getX(b) +
+              thicknessAttr.getX(c)
+            ) / 3;
+
+            const position: [number, number, number] = [
+              intersection.point.x,
+              intersection.point.y,
+              intersection.point.z
+            ];
+
+            onThicknessQuery?.(thickness, position);
+            console.log(`Queried thickness: ${thickness.toFixed(2)}mm at`, position);
+          }
+          return; // Don't process face clicks when in thickness analysis mode
+        }
+      }
+
+      // Normal face click handling
+      if (meshRef.current && triFaceMapArrayRef.current) {
+        const intersects = raycaster.intersectObject(meshRef.current);
+        if (intersects.length > 0) {
+          const intersection = intersects[0];
+          if (intersection.faceIndex !== undefined) {
+            // Get the face ID from the tri_face_map
+            const faceId = triFaceMapArrayRef.current[intersection.faceIndex];
+            const multiSelect = event.ctrlKey || event.metaKey;
+            console.log('Clicked face:', faceId, multiSelect ? '(multi-select)' : '');
+            if (onFaceClickRef.current) {
+              onFaceClickRef.current(faceId.toString(), multiSelect);
+            }
           }
         }
       }
@@ -231,6 +280,7 @@ export default function Viewer3D({ gltfUrl, triFaceMapUrl, topologyUrl, highligh
         }
 
         meshRef.current = mesh;
+        mesh.renderOrder = 10;  // Main mesh renders first
 
         // Set up material with vertex colors and better shading
         const material = new THREE.MeshStandardMaterial({
@@ -242,8 +292,16 @@ export default function Viewer3D({ gltfUrl, triFaceMapUrl, topologyUrl, highligh
         });
         mesh.material = material;
 
-        // Initialize colors (all gray with slight warmth)
-        initializeColors(mesh);
+        // Check if mesh already has vertex colors (e.g., from thickness heatmap)
+        const hasVertexColors = mesh.geometry.attributes.color !== undefined;
+
+        if (hasVertexColors) {
+          console.log('Mesh has vertex colors (thickness heatmap) - preserving them');
+        } else {
+          // Initialize colors (all gray with slight warmth) only if no colors exist
+          console.log('No vertex colors found - initializing with default gray');
+          initializeColors(mesh);
+        }
 
         // Add to scene
         sceneRef.current?.add(mesh);
@@ -308,6 +366,220 @@ export default function Viewer3D({ gltfUrl, triFaceMapUrl, topologyUrl, highligh
         console.error('You may need to re-upload the model to generate topology.json with the new engine version');
       });
   }, [topologyUrl]);
+
+  // Load SDF when URL changes
+  useEffect(() => {
+    if (!sdfUrl) {
+      sdfRef.current = null;
+      return;
+    }
+
+    console.log('Loading SDF from:', sdfUrl);
+    fetch(sdfUrl)
+      .then(res => res.json())
+      .then((data: SDF) => {
+        sdfRef.current = data;
+        sdfBboxRef.current = data.metadata.bbox;  // Store bbox for clipping plane
+        console.log(`Loaded SDF: ${data.metadata.nx}×${data.metadata.ny}×${data.metadata.nz} voxels (${data.metadata.valid_voxels} valid)`);
+        console.log(`Thickness range: ${data.metadata.thickness_range[0]} - ${data.metadata.thickness_range[1]} mm`);
+        console.log(`SDF Bbox:`, data.metadata.bbox);
+      })
+      .catch(error => {
+        console.error('Error loading SDF:', error);
+        sdfRef.current = null;
+        sdfBboxRef.current = null;
+      });
+  }, [sdfUrl]);
+
+  // Render slice mesh from SDF
+  useEffect(() => {
+    // Remove old slice mesh if it exists
+    if (sliceMeshRef.current && sceneRef.current) {
+      sceneRef.current.remove(sliceMeshRef.current);
+      sliceMeshRef.current.geometry.dispose();
+      (sliceMeshRef.current.material as THREE.Material).dispose();
+      sliceMeshRef.current = null;
+    }
+
+    // Don't render if thickness analysis is off or we don't have data
+    if (!sdfRef.current || !showThicknessAnalysis || !sceneRef.current) {
+      return;
+    }
+
+    const sdf = sdfRef.current;
+    const bbox = sdf.metadata.bbox;
+    const axis = slicePlaneAxis || 'z';
+    const position = slicePlanePosition ?? 0.5;
+
+    // Create slice plane
+    const plane = createSlicePlane(axis, position, bbox);
+
+    console.log(`Computing SDF slice: axis=${axis}, position=${(position * 100).toFixed(0)}%`);
+
+    // Compute slice triangles from SDF
+    const triangles = sliceSDF(sdf, plane, 50); // 50x50 grid resolution
+
+    console.log(`Generated ${triangles.length} slice triangles`);
+
+    if (triangles.length === 0) {
+      console.warn('No triangles generated for this slice position');
+      return;
+    }
+
+    // Build Three.js geometry with custom thickness range
+    const positions: number[] = [];
+    const colors: number[] = [];
+    const thicknesses: number[] = [];
+
+    for (const tri of triangles) {
+      for (let i = 0; i < 3; i++) {
+        positions.push(...tri.vertices[i]);
+        // Use custom thickness range if provided, otherwise use SDF range
+        colors.push(...thicknessToColor(tri.thicknesses[i], thicknessRange));
+        // Store thickness value for querying
+        thicknesses.push(tri.thicknesses[i]);
+      }
+    }
+
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+    geometry.setAttribute('thickness', new THREE.Float32BufferAttribute(thicknesses, 1));
+    geometry.computeVertexNormals();
+
+    const material = new THREE.MeshStandardMaterial({
+      vertexColors: true,
+      side: THREE.DoubleSide,
+      metalness: 0.3,
+      roughness: 0.5,
+      transparent: false,  // Slice should be fully visible
+      depthWrite: true,
+      depthTest: true
+    });
+
+    const sliceMesh = new THREE.Mesh(geometry, material);
+    sliceMesh.renderOrder = 100;  // Slice renders on top of main mesh (10)
+
+    sceneRef.current.add(sliceMesh);
+    sliceMeshRef.current = sliceMesh;
+
+    console.log('SDF slice mesh rendered successfully');
+  }, [sdfUrl, showThicknessAnalysis, slicePlanePosition, slicePlaneAxis, thicknessRange]);
+
+  // Manage clipping plane for section view (CAD-style slicing)
+  useEffect(() => {
+    if (!meshRef.current || !sdfBboxRef.current) return;
+
+    const mesh = meshRef.current;
+    const material = mesh.material as THREE.MeshStandardMaterial;
+
+    if (showThicknessAnalysis && sdfUrl && sdfBboxRef.current) {
+      // Create or update clipping plane
+      if (!clippingPlaneRef.current) {
+        clippingPlaneRef.current = new THREE.Plane();
+      }
+
+      // Use SDF bounding box (same as slice mesh) for consistent clipping
+      const bbox = sdfBboxRef.current;
+      const center = [
+        (bbox.min[0] + bbox.max[0]) / 2,
+        (bbox.min[1] + bbox.max[1]) / 2,
+        (bbox.min[2] + bbox.max[2]) / 2
+      ];
+
+      // Calculate plane position based on slicePlanePosition (0-1)
+      // This MUST match the logic in createSlicePlane()
+      const plane = clippingPlaneRef.current;
+      let planePos: number;
+
+      if (slicePlaneAxis === 'x') {
+        planePos = bbox.min[0] + slicePlanePosition * (bbox.max[0] - bbox.min[0]);
+        // Normal points in -X direction to CLIP +X side (keep -X side)
+        plane.setFromNormalAndCoplanarPoint(
+          new THREE.Vector3(-1, 0, 0),
+          new THREE.Vector3(planePos, center[1], center[2])
+        );
+      } else if (slicePlaneAxis === 'y') {
+        planePos = bbox.min[1] + slicePlanePosition * (bbox.max[1] - bbox.min[1]);
+        // Normal points in -Y direction to CLIP +Y side (keep -Y side)
+        plane.setFromNormalAndCoplanarPoint(
+          new THREE.Vector3(0, -1, 0),
+          new THREE.Vector3(center[0], planePos, center[2])
+        );
+      } else {
+        planePos = bbox.min[2] + slicePlanePosition * (bbox.max[2] - bbox.min[2]);
+        // Normal points in -Z direction to CLIP +Z side (keep -Z side)
+        plane.setFromNormalAndCoplanarPoint(
+          new THREE.Vector3(0, 0, -1),
+          new THREE.Vector3(center[0], center[1], planePos)
+        );
+      }
+
+      // Apply clipping plane to material
+      material.clippingPlanes = [plane];
+      material.clipShadows = true;
+      material.needsUpdate = true;
+
+      console.log(`Clipping plane: axis=${slicePlaneAxis}, position=${slicePlanePosition.toFixed(2)}, planePos=${planePos.toFixed(2)}`);
+    } else {
+      // Disable clipping
+      material.clippingPlanes = null;
+      material.needsUpdate = true;
+      clippingPlaneRef.current = null;
+
+      console.log('Clipping plane disabled');
+    }
+  }, [showThicknessAnalysis, slicePlanePosition, slicePlaneAxis, sdfUrl]);
+
+  // Color mesh vertices using SDF thickness data
+  useEffect(() => {
+    if (!meshRef.current || !sdfRef.current || !showThicknessAnalysis) {
+      return;
+    }
+
+    const mesh = meshRef.current;
+    const sdf = sdfRef.current;
+    const geometry = mesh.geometry;
+
+    // Get vertex positions
+    const positions = geometry.getAttribute('position');
+    if (!positions) return;
+
+    const vertexCount = positions.count;
+    const colors = new Float32Array(vertexCount * 3);
+
+    console.log(`Coloring ${vertexCount} mesh vertices from SDF...`);
+
+    // Sample SDF at each vertex and assign color
+    for (let i = 0; i < vertexCount; i++) {
+      const x = positions.getX(i);
+      const y = positions.getY(i);
+      const z = positions.getZ(i);
+
+      // Sample SDF thickness at this vertex position
+      const thickness = sampleSDF(sdf, [x, y, z]);
+
+      // Convert thickness to color
+      const color = thicknessToColor(thickness, thicknessRange);
+
+      colors[i * 3] = color[0];
+      colors[i * 3 + 1] = color[1];
+      colors[i * 3 + 2] = color[2];
+    }
+
+    // Apply colors to geometry
+    geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+    geometry.attributes.color.needsUpdate = true;
+
+    // Ensure material uses vertex colors
+    const material = mesh.material as THREE.MeshStandardMaterial;
+    material.vertexColors = true;
+    material.needsUpdate = true;
+
+    console.log('Mesh colored from SDF thickness data');
+  }, [showThicknessAnalysis, sdfRef.current, thicknessRange]);
+
+  // Model is now always visible during thickness analysis (semi-transparent overlay)
 
   // Create topology overlay whenever both scene and topology data are ready
   useEffect(() => {

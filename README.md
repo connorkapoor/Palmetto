@@ -1,5 +1,10 @@
 # Palmetto
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![C++](https://img.shields.io/badge/C%2B%2B-17-blue.svg)](https://isocpp.org/)
+[![Python](https://img.shields.io/badge/Python-3.10+-blue.svg)](https://www.python.org/)
+[![OpenCASCADE](https://img.shields.io/badge/OpenCASCADE-7.8+-green.svg)](https://www.opencascade.com/)
+
 A CAD Feature Recognition Tool with Graph-Based Analysis
 
 ## Overview
@@ -10,10 +15,12 @@ Palmetto is an expandable DFM (Design for Manufacturing) and feature checking to
 
 - **Graph-Based Recognition**: Uses Attributed Adjacency Graph (AAG) following the Analysis Situs framework
 - **Extensible Architecture**: Plugin-based recognizers for easy expansion
-- **Multiple File Formats**: Support for STEP, IGES, and BREP files
+- **STEP File Support**: Import and analyze STEP CAD models (.step, .stp)
 - **Natural Language Interface**: Powered by Claude API for intuitive feature queries
 - **3D Visualization**: glTF-based rendering with face-level highlighting
-- **Feature Detection**: Holes, shafts, cavities, fillets, and more
+- **DFM Analysis**: Comprehensive manufacturability checks for 5 manufacturing processes
+- **Feature Detection**: Holes, cavities, pockets, fillets, chamfers, and more
+- **Thickness Analysis**: Volumetric wall thickness calculation with visualization
 
 ## Architecture
 
@@ -95,12 +102,26 @@ Visit http://localhost:5173 to use the application.
 
 Implemented in C++ using Analysis Situs algorithms:
 - **Holes**: Simple through-holes, countersunk, counterbored
-- **Cavities**: Pockets and recesses (concave regions)
-- **Fillets**: Toroidal blend surfaces
+- **Cavities & Pockets**: Recesses with depth classification (through-hole, blind pocket, shallow recess, deep cavity)
+- **Fillets**: Toroidal blend surfaces with radius detection
 - **Chamfers**: Beveled edges
-- **Blends**: General blending features
+- **Blends**: General blending features with constant radius
 
 All recognizers operate on the Attributed Adjacency Graph (AAG) representation of the CAD model.
+
+## DFM (Design for Manufacturing) Analysis
+
+Comprehensive manufacturability checking for 5 processes:
+- **Injection Molding**: Wall thickness, draft angles, undercuts, side action requirements
+- **CNC Machining**: Tool accessibility, deep pockets, narrow openings, sharp corners
+- **3D Printing (Additive)**: Overhang angles, support requirements
+- **Sheet Metal**: Bend radii, hole proximity
+- **Investment Casting**: Minimum walls, internal radii
+
+DFM checks use advanced geometric analysis:
+- **Ray-based undercut detection** - Volumetric obstruction analysis using Intel Embree
+- **Pocket depth classification** - Aspect ratios and accessibility scoring
+- **Thickness analysis** - Volumetric wall thickness with SDF (Signed Distance Field)
 
 ## API Endpoints
 
@@ -174,21 +195,37 @@ Deploy Palmetto to production:
 
 ## Roadmap
 
-- [ ] Additional recognizers (threads, chamfers, ribs)
-- [ ] AI/ML-based feature recognition
-- [ ] DFM rule checking
-- [ ] Manufacturing cost estimation
+### Completed ✅
+- [x] Graph-based feature recognition (AAG)
+- [x] DFM rule checking for 5 manufacturing processes
+- [x] Thickness analysis with volumetric SDF
+- [x] Natural language query interface
+- [x] Basic recognizers (holes, cavities, fillets, chamfers)
+
+### In Progress / Planned
+- [ ] Additional recognizers (threads, bosses, ribs, slots)
+- [ ] AI/ML-based feature recognition enhancements
+- [ ] Manufacturing cost estimation based on DFM violations
 - [ ] Export to manufacturing formats (G-code, toolpaths)
-- [ ] Multi-user collaboration
-- [ ] Database persistence
+- [ ] Multi-user collaboration and project management
+- [ ] Database persistence for design history
+- [ ] Support for additional file formats (IGES, Parasolid)
+- [ ] Assembly analysis and BOM generation
 
 ## License
 
-MIT
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ## Contributing
 
-Contributions welcome! Please read our contributing guidelines and submit pull requests.
+Contributions are welcome! Please read our [Contributing Guidelines](CONTRIBUTING.md) before submitting pull requests.
+
+**Ways to contribute:**
+- Report bugs and suggest features via GitHub Issues
+- Improve documentation
+- Add new feature recognizers
+- Enhance DFM rules for different manufacturing processes
+- Fix bugs and improve performance
 
 ## Acknowledgments
 

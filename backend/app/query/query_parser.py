@@ -138,6 +138,14 @@ Face attributes:
 - has_arc_edges: Boolean - true if face has arc edges
 - quarter_circle_edge_count: Number of 90-degree arc edges (typical for fillets)
 - semicircle_edge_count: Number of 180-degree arc edges (typical for holes)
+- local_thickness: Local wall thickness at face centroid in mm (from ray casting analysis)
+- is_thin_wall_face: Boolean - true if this face is part of a thin wall feature
+- wall_thickness: Wall thickness for thin wall features in mm
+- thickness_variance: Standard deviation of thickness across face (0-1, higher = non-uniform)
+- stress_concentration: SDF gradient magnitude (0-1, higher = sharp thickness changes)
+- draft_angle: Draft angle in degrees (positive = good for molding, negative = undercut)
+- overhang_angle: Overhang angle from horizontal in degrees (>45° requires supports for 3D printing)
+- has_undercut: Boolean - true if face has negative draft angle (prevents demolding)
 
 Edge attributes:
 - curve_type: line, circle, ellipse, hyperbola, parabola, bezier, bspline
@@ -267,6 +275,79 @@ Assistant: {{
     "sort_by": "length",
     "order": "asc",
     "limit": 1
+}}
+
+User: "show faces with thickness less than 2mm"
+Assistant: {{
+    "entity_type": "face",
+    "predicates": [
+        {{"attribute": "local_thickness", "operator": "lt", "value": 2.0}}
+    ]
+}}
+
+User: "find faces with thickness between 2 and 5mm"
+Assistant: {{
+    "entity_type": "face",
+    "predicates": [
+        {{"attribute": "local_thickness", "operator": "gte", "value": 2.0}},
+        {{"attribute": "local_thickness", "operator": "lte", "value": 5.0}}
+    ]
+}}
+
+User: "show thin walls"
+Assistant: {{
+    "entity_type": "face",
+    "predicates": [
+        {{"attribute": "is_thin_wall_face", "operator": "eq", "value": true}}
+    ]
+}}
+
+User: "find faces with non-uniform thickness"
+Assistant: {{
+    "entity_type": "face",
+    "predicates": [
+        {{"attribute": "thickness_variance", "operator": "gt", "value": 0.3}}
+    ]
+}}
+
+User: "show high stress concentration areas"
+Assistant: {{
+    "entity_type": "face",
+    "predicates": [
+        {{"attribute": "stress_concentration", "operator": "gt", "value": 0.7}}
+    ]
+}}
+
+User: "find undercuts"
+Assistant: {{
+    "entity_type": "face",
+    "predicates": [
+        {{"attribute": "has_undercut", "operator": "eq", "value": true}}
+    ]
+}}
+
+User: "show faces with insufficient draft angle"
+Assistant: {{
+    "entity_type": "face",
+    "predicates": [
+        {{"attribute": "draft_angle", "operator": "lt", "value": 1.0}}
+    ]
+}}
+
+User: "find overhangs that need support"
+Assistant: {{
+    "entity_type": "face",
+    "predicates": [
+        {{"attribute": "overhang_angle", "operator": "gt", "value": 45.0}}
+    ]
+}}
+
+User: "faces with extreme overhang"
+Assistant: {{
+    "entity_type": "face",
+    "predicates": [
+        {{"attribute": "overhang_angle", "operator": "gt", "value": 70.0}}
+    ]
 }}
 
 User: "show all line edges"
@@ -729,6 +810,109 @@ IMPORTANT: Respond ONLY with the JSON object, no other text or explanation."""
                 operator=Operator.LT,
                 value=radius_value
             ))
+
+        # Thickness patterns
+        if entity_type == "face":
+            # Pattern: "thin walls" or "thin wall"
+            if re.search(r'thin\s+walls?', query_lower):
+                predicates.append(Predicate(
+                    attribute="is_thin_wall_face",
+                    operator=Operator.EQ,
+                    value=True
+                ))
+
+            # Pattern: "thickness < 2" or "thickness less than 2mm"
+            thickness_lt_match = re.search(r'thickness\s+(?:less\s+than|<|under)\s+(\d+(?:\.\d+)?)', query_lower)
+            if thickness_lt_match:
+                thickness_value = float(thickness_lt_match.group(1))
+                predicates.append(Predicate(
+                    attribute="local_thickness",
+                    operator=Operator.LT,
+                    value=thickness_value
+                ))
+
+            # Pattern: "thickness > 5" or "thickness greater than 5mm"
+            thickness_gt_match = re.search(r'thickness\s+(?:greater\s+than|>|over)\s+(\d+(?:\.\d+)?)', query_lower)
+            if thickness_gt_match:
+                thickness_value = float(thickness_gt_match.group(1))
+                predicates.append(Predicate(
+                    attribute="local_thickness",
+                    operator=Operator.GT,
+                    value=thickness_value
+                ))
+
+            # Pattern: "thickness between 2 and 5"
+            thickness_range_match = re.search(r'thickness\s+between\s+(\d+(?:\.\d+)?)\s+and\s+(\d+(?:\.\d+)?)', query_lower)
+            if thickness_range_match:
+                min_thickness = float(thickness_range_match.group(1))
+                max_thickness = float(thickness_range_match.group(2))
+                predicates.append(Predicate(
+                    attribute="local_thickness",
+                    operator=Operator.GTE,
+                    value=min_thickness
+                ))
+                predicates.append(Predicate(
+                    attribute="local_thickness",
+                    operator=Operator.LTE,
+                    value=max_thickness
+                ))
+
+            # DFM attribute patterns
+            # Pattern: "non-uniform thickness" or "thickness variance"
+            if re.search(r'(non[- ]?uniform|variance|varying)\s+thickness', query_lower) or "thickness variance" in query_lower:
+                predicates.append(Predicate(
+                    attribute="thickness_variance",
+                    operator=Operator.GT,
+                    value=0.3  # Threshold for non-uniform
+                ))
+
+            # Pattern: "stress concentration" or "high stress"
+            if re.search(r'(high\s+)?stress(\s+concentration)?', query_lower):
+                predicates.append(Predicate(
+                    attribute="stress_concentration",
+                    operator=Operator.GT,
+                    value=0.7  # Threshold for high stress
+                ))
+
+            # Pattern: "undercuts" or "undercut"
+            if re.search(r'undercuts?', query_lower):
+                predicates.append(Predicate(
+                    attribute="has_undercut",
+                    operator=Operator.EQ,
+                    value=True
+                ))
+
+            # Pattern: "insufficient draft" or "draft angle less than"
+            draft_lt_match = re.search(r'(?:draft\s+(?:angle\s+)?(?:less\s+than|<)|insufficient\s+draft)\s*(\d+(?:\.\d+)?)', query_lower)
+            if draft_lt_match:
+                draft_value = float(draft_lt_match.group(1))
+                predicates.append(Predicate(
+                    attribute="draft_angle",
+                    operator=Operator.LT,
+                    value=draft_value
+                ))
+            elif "insufficient draft" in query_lower or "low draft" in query_lower:
+                predicates.append(Predicate(
+                    attribute="draft_angle",
+                    operator=Operator.LT,
+                    value=1.0  # Default threshold
+                ))
+
+            # Pattern: "overhangs" or "overhang angle"
+            overhang_match = re.search(r'overhang\s+(?:angle\s+)?(?:greater\s+than|>)\s*(\d+(?:\.\d+)?)', query_lower)
+            if overhang_match:
+                overhang_value = float(overhang_match.group(1))
+                predicates.append(Predicate(
+                    attribute="overhang_angle",
+                    operator=Operator.GT,
+                    value=overhang_value
+                ))
+            elif "overhangs" in query_lower or "overhang" in query_lower:
+                predicates.append(Predicate(
+                    attribute="overhang_angle",
+                    operator=Operator.GT,
+                    value=45.0  # Default threshold for 3D printing
+                ))
 
         # Warn if no predicates and no sorting (query might not be understood)
         if len(predicates) == 0 and sort_by is None:

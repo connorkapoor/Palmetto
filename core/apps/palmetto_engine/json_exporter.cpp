@@ -583,6 +583,65 @@ bool JsonExporter::export_aag(const std::string& filepath) {
             }
         }
 
+        // Add DFM geometry analysis data if available
+        auto variance_it = engine_.get_variance_results().find(face_id_0based);
+        if (variance_it != engine_.get_variance_results().end()) {
+            out << ",\n        \"thickness_variance\": " << std::fixed << std::setprecision(3) << variance_it->second;
+        }
+
+        auto stress_it = engine_.get_stress_results().find(face_id_0based);
+        if (stress_it != engine_.get_stress_results().end()) {
+            out << ",\n        \"stress_concentration\": " << std::fixed << std::setprecision(3) << stress_it->second;
+        }
+
+        auto draft_it = engine_.get_draft_results().find(face_id_0based);
+        if (draft_it != engine_.get_draft_results().end()) {
+            out << ",\n        \"draft_angle\": " << std::fixed << std::setprecision(2) << draft_it->second;
+        }
+
+        auto overhang_it = engine_.get_overhang_results().find(face_id_0based);
+        if (overhang_it != engine_.get_overhang_results().end()) {
+            out << ",\n        \"overhang_angle\": " << std::fixed << std::setprecision(2) << overhang_it->second;
+        }
+
+        auto undercut_it = engine_.get_undercut_results().find(face_id_0based);
+        if (undercut_it != engine_.get_undercut_results().end()) {
+            out << ",\n        \"has_undercut\": " << (undercut_it->second ? "true" : "false");
+        }
+
+        // Export molding accessibility (true undercut detection)
+        auto molding_it = engine_.get_molding_accessibility().find(face_id_0based);
+        if (molding_it != engine_.get_molding_accessibility().end()) {
+            const auto& result = molding_it->second;
+            out << ",\n        \"is_undercut\": " << (result.is_accessible_molding ? "false" : "true");
+            out << ",\n        \"requires_side_action\": " << (result.requires_side_action ? "true" : "false");
+            out << ",\n        \"molding_accessibility_score\": " << std::fixed << std::setprecision(2)
+                << result.accessibility_score;
+        }
+
+        // Export CNC accessibility
+        auto cnc_it = engine_.get_cnc_accessibility().find(face_id_0based);
+        if (cnc_it != engine_.get_cnc_accessibility().end()) {
+            const auto& result = cnc_it->second;
+            out << ",\n        \"is_accessible_cnc\": " << (result.is_accessible_cnc ? "true" : "false");
+            out << ",\n        \"cnc_accessibility_score\": " << std::fixed << std::setprecision(2)
+                << result.accessibility_score;
+        }
+
+        // Export pocket depth metrics (if face belongs to a cavity)
+        for (const auto& [pocket_id, pocket_result] : engine_.get_pocket_depths()) {
+            if (pocket_result.face_ids.count(face_id_0based) > 0) {
+                out << ",\n        \"pocket_depth\": " << std::fixed << std::setprecision(2)
+                    << pocket_result.depth;
+                out << ",\n        \"pocket_aspect_ratio\": " << std::fixed << std::setprecision(2)
+                    << pocket_result.aspect_ratio;
+                out << ",\n        \"pocket_type\": " << static_cast<int>(pocket_result.type);
+                out << ",\n        \"is_deep_pocket\": " << (pocket_result.is_deep ? "true" : "false");
+                out << ",\n        \"is_narrow_pocket\": " << (pocket_result.is_narrow ? "true" : "false");
+                break;  // Only export once per face
+            }
+        }
+
         out << "\n";
         out << "      }\n";
         out << "    }";

@@ -26,10 +26,16 @@ dist/
 *.local
 .DS_Store
 
-# Environment
+# Environment & Secrets
 .env
 .env.local
 .env.*.local
+*.key
+*.pem
+*.cert
+*.crt
+secrets.json
+credentials.json
 
 # IDE
 .vscode/
@@ -44,7 +50,7 @@ dist/
 uploads/
 temp/
 
-# CAD files (for testing, exclude from git)
+# CAD files (exclude from git by default, except examples)
 *.step
 *.stp
 *.iges
@@ -52,6 +58,10 @@ temp/
 *.brep
 *.gltf
 *.glb
+
+# But allow example/test CAD files
+!examples/**/*.step
+!examples/**/*.stp
 
 # Logs
 *.log

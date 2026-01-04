@@ -19,6 +19,8 @@
 #include <BRepAdaptor_Surface.hxx>
 #include <IntCurvesFace_ShapeIntersector.hxx>
 #include <Precision.hxx>
+#include <BRepBuilderAPI_MakeVertex.hxx>
+#include <BRepExtrema_DistShapeShape.hxx>
 
 // Palmetto recognizer includes
 #include "hole_recognizer.h"
@@ -26,6 +28,11 @@
 #include "chamfer_recognizer.h"
 #include "cavity_recognizer.h"
 #include "thin_wall_recognizer.h"
+
+// DFM analyzer includes
+#include "thickness_variance_analyzer.h"
+#include "draft_angle_analyzer.h"
+#include "sdf_gradient_analyzer.h"
 #include "thin_wall_recognizer_v2.h"
 
 // glTF export
@@ -849,6 +856,54 @@ bool Engine::export_analysis_mesh(const std::string& mesh_path,
     return true;
 }
 
+bool Engine::export_sdf(
+    const std::string& sdf_path,
+    int resolution,
+    double max_search_distance,
+    bool adaptive,
+    double narrow_band_width
+) {
+    if (shape_.IsNull()) {
+        std::cerr << "ERROR: No shape loaded for SDF export\n";
+        return false;
+    }
+
+    std::cout << "\n[Signed Distance Field Generation]\n";
+    if (adaptive) {
+        std::cout << "  Mode: Adaptive (narrow-band level set)\n";
+        std::cout << "  Resolution: " << resolution << "³ voxels (near boundaries)\n";
+        std::cout << "  Narrow band width: " << narrow_band_width << " mm\n";
+    } else {
+        std::cout << "  Mode: Uniform dense grid\n";
+        std::cout << "  Resolution: " << resolution << "³ voxels\n";
+        std::cout << "  Max search distance: " << max_search_distance << " mm\n";
+    }
+
+    // Generate SDF with thickness data
+    SDFGenerator generator;
+    SDF sdf;
+    if (adaptive) {
+        sdf = generator.GenerateAdaptiveSDF(shape_, resolution, narrow_band_width);
+    } else {
+        sdf = generator.GenerateSDF(shape_, resolution, max_search_distance);
+    }
+
+    if (sdf.thickness.empty()) {
+        std::cerr << "ERROR: SDF generation failed\n";
+        return false;
+    }
+
+    // Export to JSON
+    if (!generator.ExportToJSON(sdf, sdf_path)) {
+        std::cerr << "ERROR: Failed to export SDF JSON\n";
+        return false;
+    }
+
+    std::cout << "  ✓ Exported SDF to " << sdf_path << "\n";
+
+    return true;
+}
+
 size_t Engine::get_face_count() const {
     return index_to_face_.size();
 }
@@ -859,6 +914,236 @@ size_t Engine::get_edge_count() const {
         count++;
     }
     return count;
+}
+
+// DFM Geometry Analysis Methods
+
+bool Engine::analyze_thickness_variance(double max_search_distance) {
+    std::cout << "\n[Thickness Variance Analysis]\n";
+    std::cout << "  Max search distance: " << max_search_distance << " mm\n";
+
+    // Use ThicknessVarianceAnalyzer
+    ThicknessVarianceAnalyzer analyzer(shape_, max_search_distance);
+    variance_results_ = analyzer.AnalyzeAll();
+
+    std::cout << "  ✓ Analyzed " << variance_results_.size() << " faces\n";
+
+    // Print statistics
+    if (!variance_results_.empty()) {
+        double min_var = std::numeric_limits<double>::max();
+        double max_var = 0.0;
+        double sum_var = 0.0;
+
+        for (const auto& pair : variance_results_) {
+            min_var = std::min(min_var, pair.second);
+            max_var = std::max(max_var, pair.second);
+            sum_var += pair.second;
+        }
+
+        double avg_var = sum_var / variance_results_.size();
+
+        std::cout << "  Variance range: " << min_var << " - " << max_var << " mm (std dev)\n";
+        std::cout << "  Average variance: " << avg_var << " mm\n";
+    }
+
+    return !variance_results_.empty();
+}
+
+bool Engine::analyze_draft_angles(const gp_Dir& draft_direction) {
+    std::cout << "\n[Draft Angle Analysis]\n";
+    std::cout << "  Draft direction: (" << draft_direction.X() << ", "
+              << draft_direction.Y() << ", " << draft_direction.Z() << ")\n";
+
+    // Use DraftAngleAnalyzer
+    DraftAngleAnalyzer analyzer(shape_, draft_direction);
+    draft_results_ = analyzer.AnalyzeDraftAngles();
+
+    std::cout << "  ✓ Analyzed " << draft_results_.size() << " faces\n";
+
+    // Count faces with insufficient draft
+    int insufficient_count = 0;
+    for (const auto& pair : draft_results_) {
+        if (pair.second < 1.0) {  // Less than 1 degree
+            insufficient_count++;
+        }
+    }
+
+    std::cout << "  Faces with insufficient draft (<1°): " << insufficient_count << "\n";
+
+    return !draft_results_.empty();
+}
+
+bool Engine::analyze_overhangs() {
+    std::cout << "\n[Overhang Analysis]\n";
+
+    // Use DraftAngleAnalyzer for overhang calculation
+    gp_Dir build_direction(0, 0, 1);  // Z-axis
+    DraftAngleAnalyzer analyzer(shape_, build_direction);
+    overhang_results_ = analyzer.AnalyzeOverhangs();
+
+    std::cout << "  ✓ Analyzed " << overhang_results_.size() << " faces\n";
+
+    // Count faces requiring support
+    int support_required_count = 0;
+    int critical_overhang_count = 0;
+
+    for (const auto& pair : overhang_results_) {
+        if (pair.second < 45.0) {  // Overhang > 45° from horizontal
+            support_required_count++;
+        }
+        if (pair.second < 30.0) {  // Critical overhang
+            critical_overhang_count++;
+        }
+    }
+
+    std::cout << "  Faces requiring supports (>45°): " << support_required_count << "\n";
+    std::cout << "  Critical overhangs (>60°): " << critical_overhang_count << "\n";
+
+    return !overhang_results_.empty();
+}
+
+bool Engine::detect_undercuts(const gp_Dir& draft_direction) {
+    std::cout << "\n[Undercut Detection]\n";
+    std::cout << "  Draft direction: (" << draft_direction.X() << ", "
+              << draft_direction.Y() << ", " << draft_direction.Z() << ")\n";
+
+    // Use DraftAngleAnalyzer
+    DraftAngleAnalyzer analyzer(shape_, draft_direction);
+    undercut_results_ = analyzer.DetectUndercuts();
+
+    std::cout << "  ✓ Analyzed " << undercut_results_.size() << " faces\n";
+
+    // Count undercuts
+    int undercut_count = 0;
+    for (const auto& pair : undercut_results_) {
+        if (pair.second) {
+            undercut_count++;
+        }
+    }
+
+    std::cout << "  Undercuts detected: " << undercut_count << "\n";
+
+    return !undercut_results_.empty();
+}
+
+bool Engine::compute_stress_concentration(const palmetto::SDF& sdf) {
+    std::cout << "\n[Stress Concentration Analysis]\n";
+    std::cout << "  Using SDF with resolution: " << sdf.nx << "x" << sdf.ny << "x" << sdf.nz << "\n";
+
+    // Use SDFGradientAnalyzer
+    SDFGradientAnalyzer analyzer(sdf, shape_);
+    stress_results_ = analyzer.ComputeStressConcentration();
+
+    std::cout << "  ✓ Analyzed " << stress_results_.size() << " faces\n";
+
+    // Count faces with high stress concentration
+    int high_stress_count = 0;
+    for (const auto& pair : stress_results_) {
+        if (pair.second > 0.7) {  // Normalized stress > 0.7
+            high_stress_count++;
+        }
+    }
+
+    std::cout << "  Faces with high stress concentration (>0.7): " << high_stress_count << "\n";
+
+    return !stress_results_.empty();
+}
+
+bool Engine::analyze_molding_accessibility(const gp_Dir& draft_direction) {
+    std::cout << "[DFM] Running molding accessibility analysis (true undercut detection)...\n";
+
+    if (!aag_) {
+        std::cerr << "ERROR: AAG not generated - call generate_aag() first\n";
+        return false;
+    }
+
+    AccessibilityAnalyzer analyzer(shape_, *aag_);
+    molding_accessibility_results_ = analyzer.AnalyzeMoldingAccessibility(draft_direction);
+
+    // Count undercuts and side action requirements
+    int undercut_count = 0;
+    int side_action_count = 0;
+    for (const auto& [face_id, result] : molding_accessibility_results_) {
+        if (!result.is_accessible_molding) {
+            undercut_count++;
+        }
+        if (result.requires_side_action) {
+            side_action_count++;
+        }
+    }
+
+    std::cout << "  Found " << undercut_count << " undercut faces (blocked/negative draft)\n";
+    std::cout << "  " << side_action_count << " require side action/lifters\n";
+
+    return !molding_accessibility_results_.empty();
+}
+
+bool Engine::analyze_cnc_accessibility() {
+    std::cout << "[DFM] Running CNC accessibility analysis...\n";
+
+    if (!aag_) {
+        std::cerr << "ERROR: AAG not generated - call generate_aag() first\n";
+        return false;
+    }
+
+    AccessibilityAnalyzer analyzer(shape_, *aag_);
+    cnc_accessibility_results_ = analyzer.AnalyzeCNCAccessibility();
+
+    // Count inaccessible faces
+    int inaccessible_count = 0;
+    for (const auto& [face_id, result] : cnc_accessibility_results_) {
+        if (!result.is_accessible_cnc) {
+            inaccessible_count++;
+        }
+    }
+
+    std::cout << "  " << inaccessible_count << " faces inaccessible for machining (cannot be reached from any standard direction)\n";
+
+    return !cnc_accessibility_results_.empty();
+}
+
+bool Engine::analyze_pocket_depths() {
+    std::cout << "[DFM] Running pocket depth analysis...\n";
+
+    if (!aag_) {
+        std::cerr << "ERROR: AAG not generated - call generate_aag() first\n";
+        return false;
+    }
+
+    // Get recognized cavities from features_
+    std::vector<std::set<int>> cavity_face_sets;
+    for (const auto& feature : features_) {
+        if (feature.type == "cavity" || feature.type == "pocket") {
+            std::set<int> face_set(feature.face_ids.begin(), feature.face_ids.end());
+            cavity_face_sets.push_back(face_set);
+        }
+    }
+
+    if (cavity_face_sets.empty()) {
+        std::cout << "  No cavities found to analyze\n";
+        return false;
+    }
+
+    PocketDepthAnalyzer analyzer(shape_, *aag_);
+    pocket_depth_results_ = analyzer.AnalyzePockets(cavity_face_sets);
+
+    // Print summary
+    int through_hole_count = 0;
+    int deep_cavity_count = 0;
+    for (const auto& [id, result] : pocket_depth_results_) {
+        if (result.is_through_hole) {
+            through_hole_count++;
+        }
+        if (result.type == PocketType::DEEP_CAVITY) {
+            deep_cavity_count++;
+        }
+    }
+
+    std::cout << "  Analyzed " << pocket_depth_results_.size() << " cavities/pockets\n";
+    std::cout << "  " << through_hole_count << " through holes\n";
+    std::cout << "  " << deep_cavity_count << " deep cavities (AR >= 2.0)\n";
+
+    return !pocket_depth_results_.empty();
 }
 
 } // namespace palmetto

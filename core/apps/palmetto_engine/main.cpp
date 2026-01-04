@@ -10,9 +10,12 @@
 #include <filesystem>
 #include <chrono>
 
+#include <gp_Dir.hxx>
+
 #include "engine.h"
 #include "json_exporter.h"
 #include "version.h"
+#include "sdf_generator.h"
 
 namespace fs = std::filesystem;
 
@@ -29,6 +32,12 @@ void print_usage(const char* prog_name) {
               << "  --analyze-thickness <mm>    Analyze thickness for all faces (max search distance, default: off)\n"
               << "  --enable-thickness-heatmap  Generate dense mesh with thickness heatmap (mesh_analysis.glb)\n"
               << "  --heatmap-quality <val>     Analysis mesh quality 0.0-1.0 (default: 0.05, denser = smaller value)\n"
+              << "  --enable-sdf                Generate volumetric Signed Distance Field (thickness_sdf.json)\n"
+              << "  --sdf-resolution <val>      SDF grid resolution along longest axis (default: 100)\n"
+              << "  --adaptive-sdf              Use adaptive SDF (narrow-band, faster with better resolution)\n"
+              << "  --narrow-band-width <mm>    Narrow band width for adaptive SDF (default: 10mm)\n"
+              << "  --analyze-dfm-geometry      Enable DFM geometry analysis (variance, draft, overhang, undercut)\n"
+              << "  --draft-direction <x,y,z>   Draft direction vector for molding (default: 0,0,1)\n"
               << "  --list-modules              List available recognition modules\n"
               << "  --version                   Print version and exit\n"
               << "  --help                      Show this help\n\n"
@@ -67,6 +76,14 @@ int main(int argc, char** argv) {
     double thickness_max_distance = 50.0;
     bool enable_thickness_heatmap = false;
     double heatmap_quality = 0.05;  // Dense mesh for FEA-style analysis
+    bool enable_sdf = false;
+    int sdf_resolution = 100;
+    bool adaptive_sdf = false;
+    double narrow_band_width = 10.0;
+    bool analyze_dfm_geometry = false;
+    double draft_direction_x = 0.0;
+    double draft_direction_y = 0.0;
+    double draft_direction_z = 1.0;
 
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];
@@ -112,6 +129,35 @@ int main(int argc, char** argv) {
         }
         else if (arg == "--heatmap-quality" && i + 1 < argc) {
             heatmap_quality = std::stod(argv[++i]);
+        }
+        else if (arg == "--enable-sdf") {
+            enable_sdf = true;
+        }
+        else if (arg == "--sdf-resolution" && i + 1 < argc) {
+            sdf_resolution = std::stoi(argv[++i]);
+        }
+        else if (arg == "--adaptive-sdf") {
+            adaptive_sdf = true;
+        }
+        else if (arg == "--narrow-band-width" && i + 1 < argc) {
+            narrow_band_width = std::stod(argv[++i]);
+        }
+        else if (arg == "--analyze-dfm-geometry") {
+            analyze_dfm_geometry = true;
+        }
+        else if (arg == "--draft-direction" && i + 1 < argc) {
+            std::string dir_str = argv[++i];
+            // Parse "x,y,z" format
+            size_t pos1 = dir_str.find(',');
+            size_t pos2 = dir_str.rfind(',');
+            if (pos1 != std::string::npos && pos2 != std::string::npos && pos1 != pos2) {
+                draft_direction_x = std::stod(dir_str.substr(0, pos1));
+                draft_direction_y = std::stod(dir_str.substr(pos1 + 1, pos2 - pos1 - 1));
+                draft_direction_z = std::stod(dir_str.substr(pos2 + 1));
+            } else {
+                std::cerr << "ERROR: Invalid draft-direction format (expected: x,y,z)\n";
+                return 1;
+            }
         }
         else {
             std::cerr << "Unknown option: " << arg << "\n";
@@ -178,6 +224,47 @@ int main(int argc, char** argv) {
             }
         }
 
+        // DFM Geometry Analysis (optional)
+        if (analyze_dfm_geometry) {
+            std::cout << "[3.6/5] Running DFM geometry analysis...\n";
+
+            // Thickness variance analysis
+            if (!engine.analyze_thickness_variance(thickness_max_distance)) {
+                std::cerr << "WARNING: Thickness variance analysis failed (continuing)\n";
+            }
+
+            // Draft angle and undercut detection for molding
+            gp_Dir draft_direction(draft_direction_x, draft_direction_y, draft_direction_z);
+            if (!engine.analyze_draft_angles(draft_direction)) {
+                std::cerr << "WARNING: Draft angle analysis failed (continuing)\n";
+            }
+            if (!engine.detect_undercuts(draft_direction)) {
+                std::cerr << "WARNING: Undercut detection failed (continuing)\n";
+            }
+
+            // Overhang analysis for 3D printing
+            if (!engine.analyze_overhangs()) {
+                std::cerr << "WARNING: Overhang analysis failed (continuing)\n";
+            }
+
+            // Enhanced undercut detection (volumetric ray-based)
+            if (!engine.analyze_molding_accessibility(draft_direction)) {
+                std::cerr << "WARNING: Molding accessibility analysis failed (continuing)\n";
+            }
+
+            // CNC tool accessibility analysis
+            if (!engine.analyze_cnc_accessibility()) {
+                std::cerr << "WARNING: CNC accessibility analysis failed (continuing)\n";
+            }
+
+            // Pocket depth and classification analysis
+            if (!engine.analyze_pocket_depths()) {
+                std::cerr << "WARNING: Pocket depth analysis failed (continuing)\n";
+            }
+
+            std::cout << "  ✓ Enhanced DFM geometry analysis complete\n";
+        }
+
         // Generate mesh with tri→face mapping
         std::cout << "[4/5] Generating mesh with face mapping...\n";
         if (!engine.export_mesh(output_dir + "/mesh.glb",
@@ -194,6 +281,27 @@ int main(int argc, char** argv) {
                                             heatmap_quality,
                                             thickness_max_distance)) {
                 std::cerr << "WARNING: Analysis mesh export failed (continuing)\n";
+            }
+        }
+
+        // Generate Signed Distance Field (optional)
+        palmetto::SDF* sdf_ptr = nullptr;
+        if (enable_sdf) {
+            std::cout << "[4.75/5] Generating volumetric SDF...\n";
+            if (!engine.export_sdf(output_dir + "/thickness_sdf.json",
+                                   sdf_resolution,
+                                   thickness_max_distance,
+                                   adaptive_sdf,
+                                   narrow_band_width)) {
+                std::cerr << "WARNING: SDF export failed (continuing)\n";
+            }
+
+            // Compute stress concentration from SDF gradients (if DFM analysis requested)
+            if (analyze_dfm_geometry) {
+                std::cout << "[4.76/5] Computing stress concentration from SDF...\n";
+                // Note: We need to load the generated SDF to compute stress concentration
+                // For now, we'll skip this as it requires refactoring export_sdf to return the SDF
+                std::cerr << "WARNING: Stress concentration analysis requires SDF in memory (feature coming soon)\n";
             }
         }
 

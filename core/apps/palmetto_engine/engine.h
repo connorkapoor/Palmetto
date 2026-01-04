@@ -16,6 +16,9 @@
 // Palmetto includes
 #include "aag.h"
 #include "thickness_analyzer.h"
+#include "sdf_generator.h"
+#include "accessibility_analyzer.h"
+#include "pocket_depth_analyzer.h"
 
 namespace palmetto {
 
@@ -96,6 +99,21 @@ public:
                               double max_search_distance);
 
     /**
+     * Export volumetric Signed Distance Field with thickness data
+     * @param sdf_path Output path for SDF JSON
+     * @param resolution Number of voxels along longest axis (e.g., 100)
+     * @param max_search_distance Maximum thickness search distance in mm
+     * @param adaptive Use adaptive SDF with narrow-band level set (default: false)
+     * @param narrow_band_width Narrow band width in mm for adaptive SDF (default: 10.0)
+     * @return true if successful
+     */
+    bool export_sdf(const std::string& sdf_path,
+                    int resolution,
+                    double max_search_distance,
+                    bool adaptive = false,
+                    double narrow_band_width = 10.0);
+
+    /**
      * Get recognized features
      */
     const std::vector<Feature>& get_features() const { return features_; }
@@ -140,6 +158,79 @@ public:
      */
     const std::map<int, ThicknessResult>& get_thickness_results() const { return thickness_results_; }
 
+    /**
+     * DFM Geometry Analysis Methods
+     */
+
+    /**
+     * Analyze thickness variance (uniformity) for all faces
+     * @param max_search_distance Maximum ray casting distance in mm
+     * @return true if successful
+     */
+    bool analyze_thickness_variance(double max_search_distance = 50.0);
+
+    /**
+     * Analyze draft angles for injection molding
+     * @param draft_direction Draft direction (typically Z-axis: 0,0,1)
+     * @return true if successful
+     */
+    bool analyze_draft_angles(const gp_Dir& draft_direction);
+
+    /**
+     * Analyze overhang angles for 3D printing
+     * @return true if successful
+     */
+    bool analyze_overhangs();
+
+    /**
+     * Detect undercuts (negative draft angles)
+     * @param draft_direction Draft direction
+     * @return true if successful
+     */
+    bool detect_undercuts(const gp_Dir& draft_direction);
+
+    /**
+     * Compute stress concentration from SDF gradient
+     * Requires SDF to be generated first via export_sdf()
+     * @param sdf The generated SDF data
+     * @return true if successful
+     */
+    bool compute_stress_concentration(const palmetto::SDF& sdf);
+
+    /**
+     * Analyze molding accessibility (true undercut detection)
+     * Uses ray-based volumetric analysis to detect blocked faces
+     * @param draft_direction Draft direction for molding
+     * @return true if successful
+     */
+    bool analyze_molding_accessibility(const gp_Dir& draft_direction);
+
+    /**
+     * Analyze CNC machining accessibility
+     * Tests face accessibility from 6 standard directions (+/-X, +/-Y, +/-Z)
+     * @return true if successful
+     */
+    bool analyze_cnc_accessibility();
+
+    /**
+     * Analyze pocket depths for recognized cavities
+     * Computes depth, aspect ratio, classification, and accessibility scores
+     * @return true if successful
+     */
+    bool analyze_pocket_depths();
+
+    /**
+     * Get DFM analysis results
+     */
+    const std::map<int, double>& get_variance_results() const { return variance_results_; }
+    const std::map<int, double>& get_stress_results() const { return stress_results_; }
+    const std::map<int, double>& get_draft_results() const { return draft_results_; }
+    const std::map<int, double>& get_overhang_results() const { return overhang_results_; }
+    const std::map<int, bool>& get_undercut_results() const { return undercut_results_; }
+    const std::map<int, AccessibilityResult>& get_molding_accessibility() const { return molding_accessibility_results_; }
+    const std::map<int, AccessibilityResult>& get_cnc_accessibility() const { return cnc_accessibility_results_; }
+    const std::map<int, PocketDepthResult>& get_pocket_depths() const { return pocket_depth_results_; }
+
 private:
     // Internal implementation
     bool run_hole_recognizer(const std::set<int>& excluded_faces = {});
@@ -162,6 +253,18 @@ private:
 
     // Thickness analysis results
     std::map<int, ThicknessResult> thickness_results_;
+
+    // DFM geometry analysis results
+    std::map<int, double> variance_results_;
+    std::map<int, double> stress_results_;
+    std::map<int, double> draft_results_;
+    std::map<int, double> overhang_results_;
+    std::map<int, bool> undercut_results_;
+
+    // Enhanced DFM analysis results
+    std::map<int, AccessibilityResult> molding_accessibility_results_;
+    std::map<int, AccessibilityResult> cnc_accessibility_results_;
+    std::map<int, PocketDepthResult> pocket_depth_results_;
 
     // Feature ID counters
     int feature_id_counter_;

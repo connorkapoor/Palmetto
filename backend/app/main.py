@@ -11,7 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.config import get_settings
-from app.api.routes import graph, analyze, query, aag
+from app.api.routes import graph, analyze, query, aag, dfm
 
 # Configure logging
 logging.basicConfig(
@@ -80,6 +80,7 @@ app.include_router(analyze.router)  # C++ engine-based analysis
 app.include_router(query.router)    # Natural language query execution
 app.include_router(aag.router)      # AAG data access
 app.include_router(graph.router)    # AAG graph visualization
+app.include_router(dfm.router)      # DFM manufacturing checks
 
 
 @app.get("/")

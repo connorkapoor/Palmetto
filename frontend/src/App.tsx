@@ -2,7 +2,7 @@
  * Main Palmetto Application Component
  */
 
-import { useState, useEffect, useRef } from 'react';
+import { useState } from 'react';
 import { Analytics } from '@vercel/analytics/react';
 import './App.css';
 import FileUpload from './components/FileUpload';
@@ -11,13 +11,14 @@ import ResultsPanel from './components/ResultsPanel';
 import AAGGraphViewer from './components/AAGGraphViewer';
 import { ScriptingPanel } from './components/ScriptingPanel';
 import { WelcomeModal } from './components/WelcomeModal';
+import DFMPanel from './components/DFMPanel';
+import { DFMViolation } from './components/DFMPanel';
 import { RecognizedFeature } from './types/features';
 
 function App() {
   const [modelId, setModelId] = useState<string | null>(null);
   const [modelFilename, setModelFilename] = useState<string>('');
   const [gltfUrl, setGltfUrl] = useState<string | null>(null);
-  const [heatmapMeshUrl, setHeatmapMeshUrl] = useState<string | null>(null);
   const [triFaceMapUrl, setTriFaceMapUrl] = useState<string | null>(null);
   const [topologyUrl, setTopologyUrl] = useState<string | null>(null);
   const [features, setFeatures] = useState<RecognizedFeature[]>([]);
@@ -28,34 +29,20 @@ function App() {
   const [selectedFeatureIds, setSelectedFeatureIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [recognitionComplete, setRecognitionComplete] = useState(false);
-  const [thinWallThreshold, setThinWallThreshold] = useState<number>(5.0);
-  const [showHeatmap, setShowHeatmap] = useState(false);
 
-  // Track if this is the initial mount to avoid running on first render
-  const isInitialMount = useRef(true);
+  // Thickness analysis state
+  const [showThicknessAnalysis, setShowThicknessAnalysis] = useState(false);
+  const [sdfUrl, setSdfUrl] = useState<string | null>(null);
+  const [slicePlaneAxis, setSlicePlaneAxis] = useState<'x' | 'y' | 'z'>('z');
+  const [slicePlanePosition, setSlicePlanePosition] = useState(0.5);
 
-  // Auto-update recognition when threshold changes (debounced)
-  useEffect(() => {
-    // Skip on initial mount
-    if (isInitialMount.current) {
-      isInitialMount.current = false;
-      return;
-    }
+  // Color range for thickness visualization (in mm)
+  const [thicknessMin, setThicknessMin] = useState(0);
+  const [thicknessMax, setThicknessMax] = useState(10);
 
-    // Only run if we have a model loaded and recognition was completed
-    if (!modelId || !recognitionComplete || loading) {
-      return;
-    }
-
-    // Debounce: wait 800ms after user stops adjusting slider
-    const debounceTimer = setTimeout(() => {
-      console.log('Threshold changed to', thinWallThreshold, '- re-running recognition...');
-      runRecognition(modelId);
-    }, 800);
-
-    return () => clearTimeout(debounceTimer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [thinWallThreshold]);
+  // Queried thickness value
+  const [queriedThickness, setQueriedThickness] = useState<number | null>(null);
+  const [queriedPosition, setQueriedPosition] = useState<[number, number, number] | null>(null);
 
   const handleUploadSuccess = async (uploadedModelId: string, filename: string) => {
     setModelId(uploadedModelId);
@@ -83,9 +70,10 @@ function App() {
           model_id: modelIdToAnalyze,
           modules: 'all',  // Run all Analysis Situs recognizers (holes, shafts, fillets, cavities)
           mesh_quality: 0.35,
-          thin_wall_threshold: thinWallThreshold,
-          enable_thickness_heatmap: true,  // Generate dense analysis mesh
+          enable_thickness_heatmap: false,  // DISABLED - use fast SDF instead!
           heatmap_quality: 0.05,  // Dense FEA-style mesh
+          enable_sdf: true,  // Generate volumetric Signed Distance Field (FAST!)
+          sdf_resolution: 100,  // SDF grid resolution (100³ = ~0.5 seconds with new optimization!)
         }),
       });
 
@@ -111,16 +99,32 @@ function App() {
 
       // Load mesh, tri_face_map, and topology (use relative URLs for Vite proxy)
       const meshUrl = `/api/analyze/${modelIdToAnalyze}/artifacts/mesh.glb`;
-      const heatmapUrl = result.artifacts?.mesh_analysis
-        ? `/api/analyze/${modelIdToAnalyze}/artifacts/mesh_analysis.glb`
+      const sdfArtifactUrl = result.artifacts?.thickness_sdf
+        ? `/api/analyze/${modelIdToAnalyze}/artifacts/thickness_sdf.json`
         : null;
       const mapUrl = `/api/analyze/${modelIdToAnalyze}/artifacts/tri_face_map.bin`;
       const topoUrl = `/api/analyze/${modelIdToAnalyze}/artifacts/topology.json`;
 
       setGltfUrl(meshUrl);
-      setHeatmapMeshUrl(heatmapUrl);
+      setSdfUrl(sdfArtifactUrl);
       setTriFaceMapUrl(mapUrl);
       setTopologyUrl(topoUrl);
+
+      // Auto-load SDF metadata to set thickness range
+      if (sdfArtifactUrl) {
+        try {
+          const sdfResponse = await fetch(sdfArtifactUrl);
+          const sdfData = await sdfResponse.json();
+          if (sdfData.metadata?.thickness_range) {
+            const [, max] = sdfData.metadata.thickness_range;
+            setThicknessMin(0);  // Always use 0 for red
+            setThicknessMax(max);  // Auto-set to detected max for blue
+            console.log(`Auto-set thickness range: 0 - ${max.toFixed(2)}mm`);
+          }
+        } catch (error) {
+          console.warn('Failed to load SDF metadata for auto-ranging:', error);
+        }
+      }
 
       // Signal that recognition is complete (triggers AAG graph fetch)
       setRecognitionComplete(true);
@@ -303,6 +307,20 @@ function App() {
     }
   };
 
+  const handleDFMViolationClick = (violation: DFMViolation) => {
+    // Extract face ID from entity_id (e.g., "face_42" -> "42")
+    const faceId = violation.entity_id.replace('face_', '');
+
+    // Highlight the face
+    setHighlightedFaceIds([faceId]);
+
+    // Update AAG nodes
+    setSelectedAagNodes([violation.entity_id]);
+
+    // Clear feature selection
+    setSelectedFeatureIds([]);
+  };
+
   return (
     <div className="app">
       <WelcomeModal onClose={() => {}} />
@@ -316,43 +334,51 @@ function App() {
           <FileUpload onUploadSuccess={handleUploadSuccess} />
 
           <div className="settings-panel">
-            <h3>Recognition Settings</h3>
-            <div className="setting-item">
-              <label htmlFor="thin-wall-threshold">
-                Thin Wall Threshold: {thinWallThreshold.toFixed(1)}mm
-                {loading && <span style={{ fontSize: '0.8em', color: '#888', marginLeft: '8px' }}>(updating...)</span>}
-              </label>
-              <input
-                id="thin-wall-threshold"
-                type="range"
-                min="1"
-                max="10"
-                step="0.5"
-                value={thinWallThreshold}
-                onChange={(e) => setThinWallThreshold(parseFloat(e.target.value))}
-                disabled={loading}
-              />
-              <div className="threshold-range">
-                <span>1mm</span>
-                <span>10mm</span>
-              </div>
-            </div>
+            <h3>Visualization Settings</h3>
 
-            {heatmapMeshUrl && (
-              <div className="setting-item">
-                <label>
-                  <input
-                    type="checkbox"
-                    checked={showHeatmap}
-                    onChange={(e) => setShowHeatmap(e.target.checked)}
-                    style={{ marginRight: '8px' }}
-                  />
-                  Show Thickness Heatmap
-                </label>
-                <p style={{ fontSize: '0.85em', color: '#888', marginTop: '4px', marginLeft: '24px' }}>
-                  Dense FEA-style mesh with color-coded thickness gradients
-                </p>
-              </div>
+            {/* Queried thickness display (toggle moved to right panel) */}
+            {sdfUrl && (
+              <>
+                {/* Queried thickness display */}
+                {queriedThickness !== null && showThicknessAnalysis && (
+                  <div className="setting-item" style={{
+                    backgroundColor: 'rgba(100, 200, 255, 0.1)',
+                    padding: '8px',
+                    borderRadius: '4px',
+                    border: '1px solid rgba(100, 200, 255, 0.3)'
+                  }}>
+                    <strong>Thickness at clicked point:</strong>
+                    <div style={{ fontSize: '1.2em', marginTop: '4px', color: '#0066cc' }}>
+                      {queriedThickness.toFixed(2)} mm
+                    </div>
+                    {queriedPosition && (
+                      <div style={{ fontSize: '0.75em', color: '#666', marginTop: '4px' }}>
+                        Position: ({queriedPosition[0].toFixed(1)}, {queriedPosition[1].toFixed(1)}, {queriedPosition[2].toFixed(1)})
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {showThicknessAnalysis && (
+                  <>
+                    {/* Auto-calculated color range display */}
+                    <div className="setting-item" style={{
+                      backgroundColor: 'rgba(240, 240, 240, 0.5)',
+                      padding: '8px',
+                      borderRadius: '6px',
+                      fontSize: '0.85em',
+                      color: '#666'
+                    }}>
+                      <div style={{ fontWeight: 600, marginBottom: '4px' }}>Auto Color Range:</div>
+                      <div>🔴 Red = 0.0mm (thin)</div>
+                      <div>🔵 Blue = {thicknessMax.toFixed(2)}mm (max detected)</div>
+                    </div>
+                    <div style={{ fontSize: '0.75em', color: '#999', marginTop: '8px', textAlign: 'center' }}>
+                      Use slice controls at bottom
+                    </div>
+                  </>
+                )}
+              </>
             )}
           </div>
 
@@ -386,13 +412,22 @@ function App() {
 
             {gltfUrl && triFaceMapUrl && topologyUrl ? (
               <Viewer3D
-                gltfUrl={showHeatmap && heatmapMeshUrl ? heatmapMeshUrl : gltfUrl}
+                gltfUrl={gltfUrl}
                 triFaceMapUrl={triFaceMapUrl}
                 topologyUrl={topologyUrl}
+                sdfUrl={sdfUrl ?? undefined}
+                showThicknessAnalysis={showThicknessAnalysis}
+                slicePlanePosition={slicePlanePosition}
+                slicePlaneAxis={slicePlaneAxis}
+                thicknessRange={[thicknessMin, thicknessMax]}
                 highlightedFaceIds={highlightedFaceIds}
                 highlightedVertexIds={highlightedVertexIds}
                 highlightedEdgeIds={highlightedEdgeIds}
                 onFaceClick={handleFaceClick}
+                onThicknessQuery={(thickness, position) => {
+                  setQueriedThickness(thickness);
+                  setQueriedPosition(position);
+                }}
               />
             ) : (
               <div className="viewer-placeholder">
@@ -408,14 +443,83 @@ function App() {
                 </div>
               </div>
             )}
+
+            {/* Floating Slice Controls - Above Query Panel */}
+            {showThicknessAnalysis && sdfUrl && (
+              <div className="floating-slice-controls">
+                <div className="floating-controls-content">
+                  <div className="control-compact">
+                    <label htmlFor="slice-axis-float">Axis:</label>
+                    <select
+                      id="slice-axis-float"
+                      value={slicePlaneAxis}
+                      onChange={(e) => setSlicePlaneAxis(e.target.value as 'x' | 'y' | 'z')}
+                    >
+                      <option value="x">X</option>
+                      <option value="y">Y</option>
+                      <option value="z">Z</option>
+                    </select>
+                  </div>
+
+                  <div className="control-compact slider-compact">
+                    <label htmlFor="slice-position-float">
+                      {(slicePlanePosition * 100).toFixed(0)}%
+                    </label>
+                    <div className="slider-compact-container">
+                      <span className="slider-label-sm">0</span>
+                      <input
+                        id="slice-position-float"
+                        type="range"
+                        min="0"
+                        max="1"
+                        step="0.01"
+                        value={slicePlanePosition}
+                        onChange={(e) => setSlicePlanePosition(parseFloat(e.target.value))}
+                        className="slice-slider-compact"
+                      />
+                      <span className="slider-label-sm">100</span>
+                    </div>
+                  </div>
+
+                  <div className="control-compact info-compact">
+                    <span>🔴 0 → 🔵 {thicknessMax.toFixed(1)}mm</span>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="graph-panel">
+            {/* Thickness Analysis Pill Toggle */}
+            {sdfUrl && (
+              <button
+                className={`thickness-toggle-pill ${showThicknessAnalysis ? 'active' : ''}`}
+                onClick={() => {
+                  setShowThicknessAnalysis(!showThicknessAnalysis);
+                  if (showThicknessAnalysis) {
+                    setQueriedThickness(null);
+                    setQueriedPosition(null);
+                  }
+                }}
+                title={showThicknessAnalysis ? 'Hide Thickness Analysis' : 'Show Thickness Analysis'}
+              >
+                <span className="pill-icon">{showThicknessAnalysis ? '◉' : '○'}</span>
+                <span className="pill-text">Thickness Analysis</span>
+                <span className="pill-range">{showThicknessAnalysis ? `0-${thicknessMax.toFixed(1)}mm` : ''}</span>
+              </button>
+            )}
+
             <AAGGraphViewer
               modelId={modelId}
               recognitionComplete={recognitionComplete}
               selectedNodeIds={selectedAagNodes}
               onNodeClick={handleAagNodeClick}
+            />
+
+            <DFMPanel
+              modelId={modelId}
+              onViolationClick={handleDFMViolationClick}
+              onClearHighlight={handleClearHighlight}
             />
           </div>
         </div>

@@ -1,3 +1,6 @@
 [submodule "core/third_party/AnalysisSitus"]
 	path = core/third_party/AnalysisSitus
 	url = https://gitlab.com/ssv/AnalysisSitus.git
+[submodule "core/third_party/tetgen"]
+	path = core/third_party/tetgen
+	url = https://github.com/libigl/tetgen.git
