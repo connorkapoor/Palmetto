@@ -17,6 +17,7 @@ function App() {
   const [modelId, setModelId] = useState<string | null>(null);
   const [modelFilename, setModelFilename] = useState<string>('');
   const [gltfUrl, setGltfUrl] = useState<string | null>(null);
+  const [heatmapMeshUrl, setHeatmapMeshUrl] = useState<string | null>(null);
   const [triFaceMapUrl, setTriFaceMapUrl] = useState<string | null>(null);
   const [topologyUrl, setTopologyUrl] = useState<string | null>(null);
   const [features, setFeatures] = useState<RecognizedFeature[]>([]);
@@ -28,6 +29,7 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [recognitionComplete, setRecognitionComplete] = useState(false);
   const [thinWallThreshold, setThinWallThreshold] = useState<number>(5.0);
+  const [showHeatmap, setShowHeatmap] = useState(false);
 
   // Track if this is the initial mount to avoid running on first render
   const isInitialMount = useRef(true);
@@ -82,6 +84,8 @@ function App() {
           modules: 'all',  // Run all Analysis Situs recognizers (holes, shafts, fillets, cavities)
           mesh_quality: 0.35,
           thin_wall_threshold: thinWallThreshold,
+          enable_thickness_heatmap: true,  // Generate dense analysis mesh
+          heatmap_quality: 0.05,  // Dense FEA-style mesh
         }),
       });
 
@@ -107,10 +111,14 @@ function App() {
 
       // Load mesh, tri_face_map, and topology (use relative URLs for Vite proxy)
       const meshUrl = `/api/analyze/${modelIdToAnalyze}/artifacts/mesh.glb`;
+      const heatmapUrl = result.artifacts?.mesh_analysis
+        ? `/api/analyze/${modelIdToAnalyze}/artifacts/mesh_analysis.glb`
+        : null;
       const mapUrl = `/api/analyze/${modelIdToAnalyze}/artifacts/tri_face_map.bin`;
       const topoUrl = `/api/analyze/${modelIdToAnalyze}/artifacts/topology.json`;
 
       setGltfUrl(meshUrl);
+      setHeatmapMeshUrl(heatmapUrl);
       setTriFaceMapUrl(mapUrl);
       setTopologyUrl(topoUrl);
 
@@ -329,6 +337,23 @@ function App() {
                 <span>10mm</span>
               </div>
             </div>
+
+            {heatmapMeshUrl && (
+              <div className="setting-item">
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={showHeatmap}
+                    onChange={(e) => setShowHeatmap(e.target.checked)}
+                    style={{ marginRight: '8px' }}
+                  />
+                  Show Thickness Heatmap
+                </label>
+                <p style={{ fontSize: '0.85em', color: '#888', marginTop: '4px', marginLeft: '24px' }}>
+                  Dense FEA-style mesh with color-coded thickness gradients
+                </p>
+              </div>
+            )}
           </div>
 
           {modelId && (
@@ -361,7 +386,7 @@ function App() {
 
             {gltfUrl && triFaceMapUrl && topologyUrl ? (
               <Viewer3D
-                gltfUrl={gltfUrl}
+                gltfUrl={showHeatmap && heatmapMeshUrl ? heatmapMeshUrl : gltfUrl}
                 triFaceMapUrl={triFaceMapUrl}
                 topologyUrl={topologyUrl}
                 highlightedFaceIds={highlightedFaceIds}
