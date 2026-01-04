@@ -105,8 +105,12 @@ add_executable(palmetto_engine ${PALMETTO_SOURCES})
 target_link_libraries(palmetto_engine
     PRIVATE
     ${OpenCASCADE_LIBRARIES}
-    /opt/homebrew/Cellar/opencascade/7.8.1_1/lib/libTKDESTEP.dylib
 )
+
+# macOS-specific OpenCASCADE library (for STEP file support)
+if(APPLE)
+    target_link_libraries(palmetto_engine PRIVATE /opt/homebrew/Cellar/opencascade/7.8.1_1/lib/libTKDESTEP.dylib)
+endif()
 
 # Link Embree if enabled
 if(EMBREE_ENABLED)

@@ -18,18 +18,21 @@ RUN apt-get update && apt-get install -y \
     libocct-ocaf-dev \
     libocct-visualization-dev \
     rapidjson-dev \
+    libembree-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy only C++ engine source
+# Copy C++ engine source (excluding submodules - they're not needed for current build)
 WORKDIR /app/core
 COPY core/apps ./apps
-COPY core/third_party ./third_party
 COPY core/cmake ./cmake
 COPY core/CMakeLists.txt .
 
-# Build palmetto_engine
+# Create third_party directory (submodules not needed for current build)
+RUN mkdir -p third_party
+
+# Build palmetto_engine with Embree support
 RUN mkdir -p .build && cd .build && \
-    cmake .. -DCMAKE_BUILD_TYPE=Release && \
+    cmake .. -DCMAKE_BUILD_TYPE=Release -DENABLE_EMBREE=ON && \
     cmake --build . --config Release -j$(nproc)
 
 # Runtime stage
@@ -45,6 +48,7 @@ RUN apt-get update && apt-get install -y \
     libocct-foundation-dev \
     libocct-modeling-algorithms-dev \
     libocct-modeling-data-dev \
+    libembree3 \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy built engine
