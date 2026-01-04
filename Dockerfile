@@ -18,7 +18,6 @@ RUN apt-get update && apt-get install -y \
     libocct-ocaf-dev \
     libocct-visualization-dev \
     rapidjson-dev \
-    libembree-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy C++ engine source (excluding submodules - they're not needed for current build)
@@ -30,9 +29,11 @@ COPY core/CMakeLists.txt .
 # Create third_party directory (submodules not needed for current build)
 RUN mkdir -p third_party
 
-# Build palmetto_engine with Embree support
+# Build palmetto_engine
+# Note: Embree (GPU ray tracing) is disabled because Ubuntu 22.04 lacks runtime package
+# The code will fall back to CPU-only mode with #ifdef USE_EMBREE guards
 RUN mkdir -p .build && cd .build && \
-    cmake .. -DCMAKE_BUILD_TYPE=Release -DENABLE_EMBREE=ON && \
+    cmake .. -DCMAKE_BUILD_TYPE=Release -DENABLE_EMBREE=OFF && \
     cmake --build . --config Release -j$(nproc)
 
 # Runtime stage
@@ -48,7 +49,6 @@ RUN apt-get update && apt-get install -y \
     libocct-foundation-dev \
     libocct-modeling-algorithms-dev \
     libocct-modeling-data-dev \
-    libembree3 \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy built engine
