@@ -6,6 +6,41 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Palmetto is a CAD feature recognition tool with graph-based analysis using the Attributed Adjacency Graph (AAG) methodology from Analysis Situs. The architecture is hybrid: C++ engine for CAD processing and feature recognition, Python FastAPI backend for API/orchestration, and React frontend for visualization.
 
+**Requirements:**
+- C++17 compiler (GCC 9+, Clang 10+, MSVC 2019+)
+- CMake 3.20+
+- OpenCASCADE 7.8+
+- Python 3.10+
+- Node.js 18+
+
+## Quick Start (Local Development)
+
+Get Palmetto running in 5 minutes:
+
+```bash
+# 1. Build C++ engine (one-time setup, ~2-5 minutes)
+cd core
+mkdir -p .build && cd .build
+cmake .. -DCMAKE_PREFIX_PATH=/opt/homebrew/Cellar/opencascade/7.8.1_1  # Adjust for your OCCT path
+cmake --build . --config Release
+
+# 2. Start backend (new terminal)
+cd backend
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+echo "CORS_ORIGINS=http://localhost:5173" > .env
+uvicorn app.main:app --reload
+
+# 3. Start frontend (new terminal)
+cd frontend
+npm install
+npm run dev
+# Visit http://localhost:5173
+```
+
+Test with sample models in `examples/test-models/`.
+
 ## Architecture: Three-Layer System
 
 ### 1. C++ Engine (`core/`)
@@ -22,6 +57,7 @@ The core feature recognition engine built with OpenCASCADE and Analysis Situs al
   - `cavity_recognizer`: Finds pockets/recesses using concave edge propagation
   - `fillet_recognizer`: Identifies toroidal blend surfaces
   - `chamfer_recognizer`: Detects beveled edges
+  - `blend_recognizer`: Detects general blending surfaces (constant radius blends)
   - Each outputs Feature objects with face_ids and geometric parameters
 
 - **Build Output**: Single `palmetto_engine` binary that processes STEP files → AAG JSON + glTF mesh + tri_face_map
@@ -208,6 +244,61 @@ npm run lint     # ESLint
 npm run format   # Prettier
 ```
 
+### Docker Development
+
+Alternative to building locally - use the optimized Dockerfile:
+
+**Build and run with Docker:**
+```bash
+# Build image (uses pre-built OCCT packages, ~5 minutes)
+docker build -t palmetto-backend .
+
+# Run backend container
+docker run -p 8000:8000 \
+  -e ANTHROPIC_API_KEY=your_key \
+  -e CORS_ORIGINS=http://localhost:5173 \
+  palmetto-backend
+
+# Frontend still runs locally
+cd frontend && npm run dev
+```
+
+**Docker architecture:**
+- Multi-stage build: builder stage compiles C++ engine, runtime stage runs FastAPI
+- Uses Ubuntu 22.04 with pre-built OpenCASCADE packages (libocct-*-dev)
+- Binary copied to `/app/palmetto_engine`, backend at `/app/backend`
+- Health check at `/health` endpoint
+
+### Railway Deployment
+
+Deploy backend to Railway (frontend → Vercel):
+
+**Automatic deployment:**
+1. Push to GitHub
+2. Railway detects `Dockerfile` and `railway.json`
+3. Builds using optimized Dockerfile (~5 minutes)
+4. Deploys with health check at `/health`
+
+**Environment variables (Railway dashboard):**
+```bash
+ANTHROPIC_API_KEY=sk-ant-xxx  # Optional, for NL queries
+CORS_ORIGINS=https://your-app.vercel.app
+# PORT is set automatically by Railway
+```
+
+**railway.json configuration:**
+- Builder: DOCKERFILE
+- Health check: `/health` endpoint, 100s timeout
+- Restart policy: ON_FAILURE, max 3 retries
+
+**Deploy frontend to Vercel:**
+1. Point Vercel to `frontend/` directory
+2. Framework preset: Vite
+3. Build command: `npm run build`
+4. Output directory: `dist`
+
+See [DEPLOYMENT.md](../DEPLOYMENT.md) for detailed deployment guide.
+
 ## Common Development Tasks
 
 ### Testing End-to-End Feature Recognition
@@ -230,6 +321,41 @@ npm run format   # Prettier
 
 4. Upload test model in browser at http://localhost:5173
 5. Check browser console and backend logs for recognition results
+
+### Test Models
+
+Use provided test models for development and debugging:
+
+**Location:** `examples/test-models/` and `examples/sample-models/`
+
+**Test with CLI:**
+```bash
+cd core/.build
+./bin/palmetto_engine \
+  --input ../../examples/test-models/simple_block.step \
+  --output /tmp/output \
+  --modules all \
+  --mesh-quality 0.35
+
+# Check output
+ls /tmp/output/
+# Expected: aag.json, mesh.glb, tri_face_map.bin, topology.json
+```
+
+**Test with API:**
+```bash
+# Upload
+MODEL_ID=$(curl -X POST http://localhost:8000/api/analyze/upload \
+  -F "file=@examples/test-models/simple_block.step" | jq -r '.model_id')
+
+# Process
+curl -X POST http://localhost:8000/api/analyze/process \
+  -H "Content-Type: application/json" \
+  -d "{\"model_id\": \"$MODEL_ID\", \"modules\": \"all\"}"
+
+# Check artifacts
+curl http://localhost:8000/api/analyze/$MODEL_ID/artifacts/aag.json | jq '.features'
+```
 
 ### Debugging "No Features Detected"
 
@@ -297,7 +423,10 @@ Rebuild and check backend logs when processing.
 - 3D viewer: `frontend/src/components/Viewer3D.tsx`
 - Query UI: `frontend/src/components/ScriptingPanel.tsx`
 - API client: `frontend/src/api/client.ts`
+- Graph viewer: `frontend/src/components/AAGGraphViewer.tsx`
 - Config: `frontend/vite.config.ts` (proxy to backend)
+  - Dev proxy: `/api/*` → `http://localhost:8000/api/*`
+  - Alias: `@` → `./src` for clean imports
 
 ## Known Pitfalls
 
@@ -320,17 +449,35 @@ Rebuild and check backend logs when processing.
    - Verify CORS_ORIGINS in backend .env includes http://localhost:5173
    - Check browser console for specific CORS error message
 
+6. **Docker build fails with OpenCASCADE errors**
+   - Ensure using Ubuntu 22.04 base image (has OCCT 7.6+)
+   - Check libocct-*-dev packages are installed in Dockerfile
+   - Verify multi-stage build copies binary correctly from builder stage
+
+7. **Railway deployment timeout**
+   - First deploy takes ~5 minutes for C++ engine build
+   - Check Railway logs for CMake/build errors
+   - Ensure health check timeout is ≥100s in railway.json
+
 ## OpenCASCADE (OCCT) Notes
 
-The C++ engine uses OCCT 7.8.x. Key classes:
+The C++ engine uses OCCT 7.8.x (local builds) or 7.6+ (Docker/Railway). Key classes:
 - `TopoDS_Shape/Face/Edge`: Topological entities
 - `BRepAdaptor_Surface`: Access underlying geometry (plane, cylinder, etc.)
 - `TopExp_Explorer`: Traverse topology (iterate faces, edges)
 - `GProp_GProps`: Compute properties (area, inertia)
 - `BRepMesh_IncrementalMesh`: Tessellation for glTF export
 
-On macOS with Homebrew: `brew install opencascade`
-CMake finds via: `CMAKE_PREFIX_PATH=/opt/homebrew/Cellar/opencascade/7.8.1_1`
+**Installation:**
+- **macOS (Homebrew)**: `brew install opencascade`
+  - CMake finds via: `CMAKE_PREFIX_PATH=/opt/homebrew/Cellar/opencascade/7.8.1_1`
+- **Linux (Ubuntu 22.04)**: `apt-get install libocct-*-dev`
+- **Docker**: Pre-built packages used in Dockerfile (fast build)
+
+**Build Time Comparison:**
+- Local with pre-installed OCCT: ~2-5 minutes
+- Docker with apt packages: ~5 minutes
+- Building OCCT from source: ~40+ minutes (not recommended)
 
 ## Data Flow Summary
 
