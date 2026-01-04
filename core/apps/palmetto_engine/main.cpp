@@ -20,21 +20,25 @@ void print_usage(const char* prog_name) {
     std::cout << "Palmetto Feature Recognition Engine v" << PALMETTO_VERSION << "\n"
               << "Usage: " << prog_name << " [options]\n\n"
               << "Options:\n"
-              << "  --input <file>         Input STEP file (required)\n"
-              << "  --outdir <dir>         Output directory (required)\n"
-              << "  --modules <list>       Comma-separated module list or 'all' (default: all)\n"
-              << "  --mesh-quality <val>   Mesh quality 0.0-1.0 (default: 0.35)\n"
-              << "  --units <unit>         Output units: mm, cm, in (default: mm)\n"
-              << "  --list-modules         List available recognition modules\n"
-              << "  --version              Print version and exit\n"
-              << "  --help                 Show this help\n\n"
+              << "  --input <file>              Input STEP file (required)\n"
+              << "  --outdir <dir>              Output directory (required)\n"
+              << "  --modules <list>            Comma-separated module list or 'all' (default: all)\n"
+              << "  --mesh-quality <val>        Mesh quality 0.0-1.0 (default: 0.35)\n"
+              << "  --units <unit>              Output units: mm, cm, in (default: mm)\n"
+              << "  --thin-wall-threshold <mm>  Thin wall thickness threshold (default: 5.0)\n"
+              << "  --analyze-thickness <mm>    Analyze thickness for all faces (max search distance, default: off)\n"
+              << "  --enable-thickness-heatmap  Generate dense mesh with thickness heatmap (mesh_analysis.glb)\n"
+              << "  --heatmap-quality <val>     Analysis mesh quality 0.0-1.0 (default: 0.05, denser = smaller value)\n"
+              << "  --list-modules              List available recognition modules\n"
+              << "  --version                   Print version and exit\n"
+              << "  --help                      Show this help\n\n"
               << "Example:\n"
-              << "  " << prog_name << " --input part.step --outdir out/ --modules all\n\n"
+              << "  " << prog_name << " --input part.step --outdir out/ --modules all --analyze-thickness 50\n\n"
               << "Outputs:\n"
               << "  mesh.glb              - 3D mesh in glTF binary format\n"
               << "  tri_face_map.bin      - Triangle to face ID mapping\n"
               << "  features.json         - Recognized features\n"
-              << "  aag.json              - Attributed Adjacency Graph\n"
+              << "  aag.json              - Attributed Adjacency Graph (includes local_thickness if --analyze-thickness used)\n"
               << "  meta.json             - Metadata (timings, counts, warnings)\n";
 }
 
@@ -45,7 +49,8 @@ void list_modules() {
     {"name": "recognize_holes", "type": "recognizer", "description": "Detect drilled holes (simple, countersunk, counterbored)"},
     {"name": "recognize_shafts", "type": "recognizer", "description": "Detect cylindrical shafts and bosses"},
     {"name": "recognize_fillets", "type": "recognizer", "description": "Detect edge-based fillets and rounds"},
-    {"name": "recognize_cavities", "type": "recognizer", "description": "Detect pockets, slots, and blind/through cavities"}
+    {"name": "recognize_cavities", "type": "recognizer", "description": "Detect pockets, slots, and blind/through cavities"},
+    {"name": "recognize_thin_walls", "type": "recognizer", "description": "Detect thin-walled features (sheets, webs, shells, concentric)"}
   ]
 })JSON" << std::endl;
 }
@@ -57,6 +62,11 @@ int main(int argc, char** argv) {
     std::string modules = "all";
     double mesh_quality = 0.35;
     std::string units = "mm";
+    double thin_wall_threshold = 5.0;
+    bool analyze_thickness = false;
+    double thickness_max_distance = 50.0;
+    bool enable_thickness_heatmap = false;
+    double heatmap_quality = 0.05;  // Dense mesh for FEA-style analysis
 
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];
@@ -89,6 +99,19 @@ int main(int argc, char** argv) {
         }
         else if (arg == "--units" && i + 1 < argc) {
             units = argv[++i];
+        }
+        else if (arg == "--thin-wall-threshold" && i + 1 < argc) {
+            thin_wall_threshold = std::stod(argv[++i]);
+        }
+        else if (arg == "--analyze-thickness" && i + 1 < argc) {
+            analyze_thickness = true;
+            thickness_max_distance = std::stod(argv[++i]);
+        }
+        else if (arg == "--enable-thickness-heatmap") {
+            enable_thickness_heatmap = true;
+        }
+        else if (arg == "--heatmap-quality" && i + 1 < argc) {
+            heatmap_quality = std::stod(argv[++i]);
         }
         else {
             std::cerr << "Unknown option: " << arg << "\n";
@@ -123,6 +146,9 @@ int main(int argc, char** argv) {
         // Create engine instance
         palmetto::Engine engine;
 
+        // Configure engine
+        engine.set_thin_wall_threshold(thin_wall_threshold);
+
         // Load STEP file
         std::cout << "[1/5] Loading STEP file...\n";
         if (!engine.load_step(input_file)) {
@@ -144,6 +170,14 @@ int main(int argc, char** argv) {
             return 1;
         }
 
+        // Analyze thickness (optional)
+        if (analyze_thickness) {
+            std::cout << "[3.5/5] Analyzing thickness...\n";
+            if (!engine.analyze_thickness(thickness_max_distance)) {
+                std::cerr << "WARNING: Thickness analysis failed (continuing)\n";
+            }
+        }
+
         // Generate mesh with tri→face mapping
         std::cout << "[4/5] Generating mesh with face mapping...\n";
         if (!engine.export_mesh(output_dir + "/mesh.glb",
@@ -151,6 +185,16 @@ int main(int argc, char** argv) {
                                 mesh_quality)) {
             std::cerr << "ERROR: Mesh export failed\n";
             return 1;
+        }
+
+        // Generate thickness heatmap analysis mesh (optional)
+        if (enable_thickness_heatmap) {
+            std::cout << "[4.5/5] Generating thickness heatmap analysis mesh...\n";
+            if (!engine.export_analysis_mesh(output_dir + "/mesh_analysis.glb",
+                                            heatmap_quality,
+                                            thickness_max_distance)) {
+                std::cerr << "WARNING: Analysis mesh export failed (continuing)\n";
+            }
         }
 
         // Export results
@@ -189,6 +233,9 @@ int main(int argc, char** argv) {
         std::cout << "    - features.json\n";
         std::cout << "    - aag.json\n";
         std::cout << "    - meta.json\n";
+        if (enable_thickness_heatmap) {
+            std::cout << "    - mesh_analysis.glb (thickness heatmap)\n";
+        }
 
         return 0;
     }

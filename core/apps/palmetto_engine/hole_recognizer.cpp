@@ -155,6 +155,7 @@ bool HoleRecognizer::HasConcaveCircularEdges(int face_id) {
     const TopoDS_Face& face = aag_.GetFace(face_id);
     gp_Lin axis_line(attrs.cylinder_axis);
 
+    int full_circle_count = 0;
     int semicircle_count = 0;
     int quarter_circle_count = 0;
 
@@ -183,7 +184,10 @@ bool HoleRecognizer::HasConcaveCircularEdges(int face_id) {
                     // Check if it's a full circle (360°)
                     bool is_full = (std::abs(param_range - 2.0 * M_PI) < 1e-6);
 
-                    if (!is_full) {
+                    if (is_full) {
+                        // Full circle edge (through-holes)
+                        full_circle_count++;
+                    } else {
                         // It's an arc - check if semicircle (180°) or quarter-circle (90°)
                         if (std::abs(arc_angle - 180.0) < 5.0) {
                             semicircle_count++;
@@ -198,10 +202,12 @@ bool HoleRecognizer::HasConcaveCircularEdges(int face_id) {
         }
     }
 
-    // Holes have multiple semicircular edges (typically 2 or 4)
+    // Holes have either:
+    // 1. Full circle edges (through-holes with top/bottom circles)
+    // 2. Multiple semicircular edges (partial holes)
     // Fillets have quarter-circle edges
-    // Return true only if we found semicircular edges and NO quarter-circle edges
-    return (semicircle_count > 0 && quarter_circle_count == 0);
+    // Return true if we found hole indicators and NO quarter-circle edges
+    return ((full_circle_count > 0 || semicircle_count > 0) && quarter_circle_count == 0);
 }
 
 std::vector<int> HoleRecognizer::FindCoaxialCylinders(int seed_face_id, std::set<int>& traversed) {

@@ -185,6 +185,7 @@ bool JsonExporter::export_aag(const std::string& filepath) {
 
     // Build set of cavity face IDs from recognized features
     std::set<int> cavityFaceIds;
+    std::set<int> thinWallFaceIds;
     const auto& features = engine_.get_features();
     for (const Feature& feat : features) {
         if (feat.type == "cavity") {
@@ -192,7 +193,15 @@ bool JsonExporter::export_aag(const std::string& filepath) {
                 cavityFaceIds.insert(face_id);
             }
         }
+        if (feat.type == "thin_wall") {
+            for (int face_id : feat.face_ids) {
+                thinWallFaceIds.insert(face_id);
+            }
+        }
     }
+
+    // Get thickness analysis results
+    const auto& thickness_results = engine_.get_thickness_results();
 
     out << "{\n";
     out << "  \"nodes\": [\n";
@@ -508,6 +517,26 @@ bool JsonExporter::export_aag(const std::string& filepath) {
             out << ",\n        \"is_cavity_face\": true";
         }
 
+        // Add thin wall information if this face is part of a thin wall
+        if (thinWallFaceIds.count(i) > 0) {
+            out << ",\n        \"is_thin_wall_face\": true";
+
+            // Find feature details
+            for (const Feature& feature : features) {
+                if (feature.type == "thin_wall") {
+                    auto it = std::find(feature.face_ids.begin(), feature.face_ids.end(), i);
+                    if (it != feature.face_ids.end()) {
+                        out << ",\n        \"thin_wall_id\": \"" << feature.id << "\"";
+                        out << ",\n        \"thin_wall_subtype\": \"" << feature.subtype << "\"";
+                        if (feature.params.count("avg_thickness") > 0) {
+                            out << ",\n        \"wall_thickness\": " << feature.params.at("avg_thickness");
+                        }
+                        break;
+                    }
+                }
+            }
+        }
+
         // Add blend chain information if this face is a blend candidate
         int face_id_1based = i + 1;  // faceMap uses 1-based indexing
         auto blend_it = blendCandidates.find(face_id_1based);
@@ -540,6 +569,17 @@ bool JsonExporter::export_aag(const std::string& filepath) {
             }
             if (!candidate.term_edges.empty()) {
                 out << ",\n        \"term_edge_count\": " << candidate.term_edges.size();
+            }
+        }
+
+        // Add thickness data if available
+        // Note: faceMap is 1-indexed, but thickness_results uses 0-indexed face IDs
+        int face_id_0based = i;  // i already iterates from 0 to face_count-1
+        auto thickness_it = thickness_results.find(face_id_0based);
+        if (thickness_it != thickness_results.end()) {
+            const ThicknessResult& result = thickness_it->second;
+            if (result.has_measurement) {
+                out << ",\n        \"local_thickness\": " << std::fixed << std::setprecision(3) << result.thickness;
             }
         }
 

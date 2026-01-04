@@ -70,6 +70,11 @@ class CppEngine:
         output_dir: Path,
         modules: str = "all",
         mesh_quality: float = 0.35,
+        thin_wall_threshold: float = 5.0,
+        analyze_thickness: bool = True,
+        thickness_max_distance: float = 50.0,
+        enable_thickness_heatmap: bool = False,
+        heatmap_quality: float = 0.05,
         timeout: int = 300
     ) -> EngineResult:
         """
@@ -80,6 +85,11 @@ class CppEngine:
             output_dir: Directory to write outputs
             modules: Comma-separated module list or "all"
             mesh_quality: Mesh tessellation quality 0.0-1.0
+            thin_wall_threshold: Thin wall thickness threshold in mm (default: 5.0)
+            analyze_thickness: Enable thickness analysis for all faces (default: True)
+            thickness_max_distance: Maximum search distance for thickness analysis in mm (default: 50.0)
+            enable_thickness_heatmap: Generate dense analysis mesh with thickness heatmap (default: False)
+            heatmap_quality: Mesh quality for analysis mesh 0.0-1.0 (default: 0.05, denser = smaller)
             timeout: Maximum processing time in seconds
 
         Returns:
@@ -98,8 +108,18 @@ class CppEngine:
             "--outdir", str(output_dir),
             "--modules", modules,
             "--mesh-quality", str(mesh_quality),
+            "--thin-wall-threshold", str(thin_wall_threshold),
             "--units", "mm"
         ]
+
+        # Add thickness analysis if enabled
+        if analyze_thickness:
+            cmd.extend(["--analyze-thickness", str(thickness_max_distance)])
+
+        # Add thickness heatmap if enabled
+        if enable_thickness_heatmap:
+            cmd.append("--enable-thickness-heatmap")
+            cmd.extend(["--heatmap-quality", str(heatmap_quality)])
 
         logger.info(f"Running C++ engine: {' '.join(cmd)}")
 

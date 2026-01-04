@@ -28,6 +28,9 @@ class AnalyzeRequest(BaseModel):
     model_id: str
     modules: str = "all"
     mesh_quality: float = 0.35
+    thin_wall_threshold: float = 5.0  # Thin wall thickness threshold in mm
+    enable_thickness_heatmap: bool = False  # Generate dense analysis mesh with thickness heatmap
+    heatmap_quality: float = 0.05  # Quality for analysis mesh (denser = smaller value)
 
 
 class AnalyzeResponse(BaseModel):
@@ -138,6 +141,9 @@ async def analyze_model(request: AnalyzeRequest):
             output_dir=output_dir,
             modules=request.modules,
             mesh_quality=request.mesh_quality,
+            thin_wall_threshold=request.thin_wall_threshold,
+            enable_thickness_heatmap=request.enable_thickness_heatmap,
+            heatmap_quality=request.heatmap_quality,
             timeout=300
         )
 
@@ -150,6 +156,10 @@ async def analyze_model(request: AnalyzeRequest):
             "metadata": f"/api/analyze/{request.model_id}/artifacts/meta.json",
             "topology": f"/api/analyze/{request.model_id}/artifacts/topology.json",
         }
+
+        # Add analysis mesh if heatmap was generated
+        if request.enable_thickness_heatmap:
+            artifacts["mesh_analysis"] = f"/api/analyze/{request.model_id}/artifacts/mesh_analysis.glb"
 
         return AnalyzeResponse(
             model_id=request.model_id,

@@ -15,6 +15,7 @@
 
 // Palmetto includes
 #include "aag.h"
+#include "thickness_analyzer.h"
 
 namespace palmetto {
 
@@ -84,6 +85,17 @@ public:
                      double quality);
 
     /**
+     * Export dense analysis mesh with thickness heatmap as vertex colors
+     * @param mesh_path Output glTF file path (mesh_analysis.glb)
+     * @param quality Mesh quality 0.0-1.0 (recommend 0.01-0.05 for dense FEA-style mesh)
+     * @param max_search_distance Maximum thickness search distance in mm
+     * @return true if successful
+     */
+    bool export_analysis_mesh(const std::string& mesh_path,
+                              double quality,
+                              double max_search_distance);
+
+    /**
      * Get recognized features
      */
     const std::vector<Feature>& get_features() const { return features_; }
@@ -111,6 +123,23 @@ public:
     size_t get_face_count() const;
     size_t get_edge_count() const;
 
+    /**
+     * Set thin wall threshold
+     */
+    void set_thin_wall_threshold(double threshold) { thin_wall_threshold_ = threshold; }
+
+    /**
+     * Analyze thickness for all faces
+     * @param max_search_distance Maximum ray casting distance in mm
+     * @return true if successful
+     */
+    bool analyze_thickness(double max_search_distance = 50.0);
+
+    /**
+     * Get thickness analysis results
+     */
+    const std::map<int, ThicknessResult>& get_thickness_results() const { return thickness_results_; }
+
 private:
     // Internal implementation
     bool run_hole_recognizer(const std::set<int>& excluded_faces = {});
@@ -118,6 +147,7 @@ private:
     bool run_fillet_recognizer();
     bool run_chamfer_recognizer();
     bool run_cavity_recognizer();
+    bool run_thin_wall_recognizer(double threshold);
 
     // Build face index map (deterministic face IDs)
     void build_face_index();
@@ -130,8 +160,14 @@ private:
     std::vector<TopoDS_Face> index_to_face_;
     std::string input_filepath_;
 
+    // Thickness analysis results
+    std::map<int, ThicknessResult> thickness_results_;
+
     // Feature ID counters
     int feature_id_counter_;
+
+    // Configuration
+    double thin_wall_threshold_;
 };
 
 } // namespace palmetto

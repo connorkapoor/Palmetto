@@ -2,7 +2,7 @@
  * Main Palmetto Application Component
  */
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Analytics } from '@vercel/analytics/react';
 import './App.css';
 import FileUpload from './components/FileUpload';
@@ -27,6 +27,33 @@ function App() {
   const [selectedFeatureIds, setSelectedFeatureIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [recognitionComplete, setRecognitionComplete] = useState(false);
+  const [thinWallThreshold, setThinWallThreshold] = useState<number>(5.0);
+
+  // Track if this is the initial mount to avoid running on first render
+  const isInitialMount = useRef(true);
+
+  // Auto-update recognition when threshold changes (debounced)
+  useEffect(() => {
+    // Skip on initial mount
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      return;
+    }
+
+    // Only run if we have a model loaded and recognition was completed
+    if (!modelId || !recognitionComplete || loading) {
+      return;
+    }
+
+    // Debounce: wait 800ms after user stops adjusting slider
+    const debounceTimer = setTimeout(() => {
+      console.log('Threshold changed to', thinWallThreshold, '- re-running recognition...');
+      runRecognition(modelId);
+    }, 800);
+
+    return () => clearTimeout(debounceTimer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [thinWallThreshold]);
 
   const handleUploadSuccess = async (uploadedModelId: string, filename: string) => {
     setModelId(uploadedModelId);
@@ -54,6 +81,7 @@ function App() {
           model_id: modelIdToAnalyze,
           modules: 'all',  // Run all Analysis Situs recognizers (holes, shafts, fillets, cavities)
           mesh_quality: 0.35,
+          thin_wall_threshold: thinWallThreshold,
         }),
       });
 
@@ -278,6 +306,30 @@ function App() {
       <div className="app-container">
         <div className="sidebar">
           <FileUpload onUploadSuccess={handleUploadSuccess} />
+
+          <div className="settings-panel">
+            <h3>Recognition Settings</h3>
+            <div className="setting-item">
+              <label htmlFor="thin-wall-threshold">
+                Thin Wall Threshold: {thinWallThreshold.toFixed(1)}mm
+                {loading && <span style={{ fontSize: '0.8em', color: '#888', marginLeft: '8px' }}>(updating...)</span>}
+              </label>
+              <input
+                id="thin-wall-threshold"
+                type="range"
+                min="1"
+                max="10"
+                step="0.5"
+                value={thinWallThreshold}
+                onChange={(e) => setThinWallThreshold(parseFloat(e.target.value))}
+                disabled={loading}
+              />
+              <div className="threshold-range">
+                <span>1mm</span>
+                <span>10mm</span>
+              </div>
+            </div>
+          </div>
 
           {modelId && (
             <>

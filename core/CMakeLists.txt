@@ -54,6 +54,9 @@ add_executable(palmetto_engine
     apps/palmetto_engine/chamfer_recognizer.cpp
     apps/palmetto_engine/cavity_recognizer.cpp
     apps/palmetto_engine/blend_recognizer.cpp
+    apps/palmetto_engine/thin_wall_recognizer.cpp
+    apps/palmetto_engine/thin_wall_recognizer_v2.cpp
+    apps/palmetto_engine/thickness_analyzer.cpp
     apps/palmetto_engine/json_exporter.cpp
 )
 
@@ -61,6 +64,7 @@ add_executable(palmetto_engine
 target_link_libraries(palmetto_engine
     PRIVATE
     ${OpenCASCADE_LIBRARIES}
+    /opt/homebrew/Cellar/opencascade/7.8.1_1/lib/libTKDESTEP.dylib
 )
 
 # Platform-specific libraries
